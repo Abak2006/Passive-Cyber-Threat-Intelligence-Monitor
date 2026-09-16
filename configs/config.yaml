@@ -1,0 +1,93 @@
+system:
+  environment: "passive_monitoring_enclave"
+  mode: "unidirectional_read_only"
+  zero_probe_enforced: true
+  database_path: "data/threats.db"
+  log_level: "INFO"
+
+ingest:
+  flow_timeout_sec: 15.0
+  sliding_window_sec: 10.0
+  max_active_flows: 50000
+  sample_pcap_path: "data/sample/demo.pcap"
+
+detectors:
+  ddos:
+    enabled: true
+    model_path: "models/ddos_detector.joblib"
+    syn_rate_threshold: 50.0          # packets/sec to a destination
+    udp_rate_threshold: 80.0
+    packet_rate_spike: 100.0
+    source_entropy_spoof_threshold: 3.5  # High entropy indicates spoofed sources
+    destination_concentration_threshold: 0.8
+    confidence_weight: 0.9
+
+  beaconing:
+    enabled: true
+    min_connections: 4
+    cv_threshold: 0.25                # Coefficient of variation < 0.25 = highly periodic
+    periodicity_score_threshold: 0.70
+    jitter_tolerance: 0.30
+    time_window_sec: 120.0
+
+  dga:
+    enabled: true
+    model_path: "models/dga_detector.joblib"
+    entropy_threshold: 3.6
+    length_threshold: 16
+    vowel_ratio_low: 0.18
+    digit_ratio_high: 0.30
+
+  dns_tunnel:
+    enabled: true
+    subdomain_length_threshold: 24
+    subdomain_entropy_threshold: 3.75
+    query_frequency_threshold: 8       # queries/sec per apex
+    txt_record_ratio_threshold: 0.40
+    unique_subdomains_threshold: 10
+
+  encrypted:
+    enabled: true
+    model_path: "models/encrypted_anomaly.joblib"
+    outbound_inbound_ratio_threshold: 7.0
+    periodicity_threshold: 0.70
+    packet_size_anomaly_threshold: 0.75
+    suspicious_ja3_hashes:
+      - "e7d705a3286e19ea42f587b344ee6865" # Cobalt Strike default
+      - "6734f37431670b3ab4292b8faae04f7b" # Metasploit HTTPS
+      - "06a2082260ff2a1aa07949826a0c0a5e" # Trickbot
+      - "72a589da586844d7f0818ce684948eea" # Emotet
+      - "b32309a26951912be7dba376398abc3b" # AsyncRAT
+
+  recon:
+    enabled: true
+    time_window_sec: 10.0
+    horizontal_scan_threshold: 8       # unique dst IPs on same port
+    vertical_scan_threshold: 8         # unique dst ports on same IP
+    syn_only_ratio_threshold: 0.75
+    short_flow_duration_sec: 0.5
+
+  exfiltration:
+    enabled: true
+    model_path: "models/exfil_detector.joblib"
+    outbound_inbound_byte_ratio: 6.0
+    sustained_outbound_rate_bps: 2000000 # ~2 MB/s in single flow
+    burst_threshold_bytes: 4000000       # 4 MB threshold in test window
+    destination_novelty_score: 0.80
+
+fusion:
+  correlation_window_sec: 25.0
+  confidence_boost_multi_detector: 0.12
+  severity_tiers:
+    low: [0.00, 0.50]
+    medium: [0.50, 0.70]
+    high: [0.70, 0.90]
+    critical: [0.90, 1.00]
+
+api:
+  host: "127.0.0.1"
+  port: 8000
+
+dashboard:
+  host: "127.0.0.1"
+  port: 8501
