@@ -48,6 +48,10 @@ class BeaconingDetector(BaseDetector):
         mean_iat, std_iat, cv, periodicity = compute_timing_stats(host_timestamps)
         iats = calculate_iats(host_timestamps)
 
+        # Continuous packet streaming (mean_iat < 0.5s) represents bulk stream transmission, not periodic beacon check-ins
+        if mean_iat < 0.5:
+            return None
+
         # High periodicity indicator: low CV and sufficient connections
         is_periodic = (cv <= self.cv_threshold and periodicity >= self.periodicity_threshold)
 

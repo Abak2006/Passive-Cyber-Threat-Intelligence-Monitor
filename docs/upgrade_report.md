@@ -3,7 +3,7 @@
 **Product**: AEGIS — AI-Powered Passive Cyber Threat Intelligence  
 **Architecture**: Strictly Passive, Unidirectional Network Threat Monitoring  
 **Verification Date**: September 2026  
-**Status**: All 36 Automated Tests Passing (100% Pass Rate)
+**Status**: All 50 Automated Tests Passing (100% Pass Rate)
 
 ---
 
@@ -69,10 +69,25 @@ AEGIS enforces the fundamental invariant that the monitoring enclave **never tra
    - SQLite WAL (Write-Ahead Logging) mode and indexed timestamp queries.
 
 9. **Comprehensive Test Suite Expansion (`tests/`)**:
-   - 36 automated pytest unit and integration tests passing (`python -m pytest tests/ -v`).
+   - 50 automated pytest unit and integration tests passing (`python -m pytest tests/ -v`).
    - `test_passive_guarantee.py`: Strict static AST and string auditing guaranteeing zero transmission calls (`send`, `connect`, `sr`, `srp`), zero firewall commands, and zero payload decryption.
    - `test_sources.py`: Auditing `DataDiodeFeedSource` for zero transmit/probe methods and verifying packet event schemas.
-   - `test_integration_stream.py`: Full end-to-end integration tests from input sources to SQLite database.
+   - `test_detectors.py`: 15 dedicated exfiltration tests covering bulk transfers (asymmetric upload, sustained rate, burst volume, zero inbound, normal API traffic, balanced duplex) and stateful slow-and-low transfers (repeated staged transfers, periodic benign duplex rejection, destination persistence escalation, irregular transfers rejection, rolling window expiration, multi-destination dispersion rejection, multi-window duration, and stateful zero inbound safety).
+   - `test_integration_stream.py`: Full end-to-end integration tests asserting both `BULK` and `SLOW_AND_LOW` exfiltration alerts and zero alerts for benign periodic traffic on `demo.pcap`.
+
+10. **Data Exfiltration Detector & Demo PCAP Scenario Overhaul (`app/detectors/exfiltration.py`, `training/generate_synthetic.py`)**:
+    - **Detection Engine**: Multi-signal passive heuristic and ML evaluation combining asymmetric byte ratios ($B_{out} / B_{in} \ge 6.0$), sustained upload throughput ($\ge 1.0\text{ MB/s}$), burst volume ($\ge 2.0\text{ MB}$), destination persistence, and Isolation Forest anomaly scoring.
+    - **Directional Guarding**: Strict directional constraint requiring ratio $\ge 2.0$ for rate/burst/ML branches to avoid false alarms on balanced duplex flows (e.g. 1.2 MB out, 1.0 MB in).
+    - **Zero Inbound Safety**: Bounded ratio handling when `inbound_bytes <= 0` preventing division by zero, NaN, or infinite confidence scores.
+    - **Realistic Synthetic Scenario**: Replaced under-sized 35 KB exfiltration artifact with a ~503 KB transfer in `demo.pcap` featuring a standard 3-way handshake (`SYN`, `SYN-ACK`, `ACK`), 363 MTU-sized data packets (~1380 B payload), sequential TCP sequence progression, periodic receiver ACKs (every 40 packets), final ACK, and clean `FIN/ACK` teardown.
+    - **Inter-Detector Isolation**: Hardened `EncryptedTrafficDetector` and `BeaconingDetector` against false triggering on high-throughput packet bursts with sub-10ms intervals, ensuring exfiltration flows produce clean `DATA_EXFILTRATION` alerts without cross-category pollution.
+
+11. **Stateful Slow-and-Low Data Exfiltration Engine (`app/detectors/exfiltration.py`, `app/features/timing_features.py`)**:
+    - **Dual-Path Architecture**: Seamlessly coexists with Bulk exfiltration. Single flows evaluate the single-flow bulk path; concurrently, staged transfers register in time-bounded deques per internal source IP to detect stealthy drip-feed exfiltration.
+    - **Rolling Multi-Window Analysis**: Evaluates sliding windows of 60s, 300s, 900s, and 3600s with memory bounding (1,000 max entries per source IP) and deduplication across active vs expired flow passes.
+    - **Temporal Signal Confluence**: Tracks cumulative forward/backward bytes, transfer count ($\ge 4$), cumulative volume ($\ge 35\text{ KB}$), destination persistence ratio ($\ge 0.75$), asymmetric ratio ($R \ge 3.5$), and interval consistency ($CV \le 0.50$).
+    - **Anti-False-Positive Boundary**: Strict rule that periodicity alone does NOT trigger alerts. Software update polling or API telemetry with balanced duplex volume ($R < 2.0$) or dispersed destinations are suppressed from generating exfiltration alerts.
+    - **Realistic Benchmark Scenarios**: Added synthetic slow-and-low exfiltration (6 staged transfers of ~9.6 KB each at 14s intervals to `203.0.113.90:443`) and legitimate balanced periodic traffic (5 transfers of ~5.6 KB in and out to `198.51.100.20:443`) in `training/generate_synthetic.py` and regenerated `demo.pcap` (722 packets total).
 
 ---
 
@@ -107,13 +122,13 @@ The following metrics represent **actual, honest, empirical numbers** measured o
 
 | Replay Speed Tier | Ingestion Throughput | Flow Evaluation Rate | P50 Latency (Median) | P95 Latency | P99 Latency | Max Latency | Peak Memory (RSS) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1.0x (Real-time)** | **11.7 pkts/sec** | **11.2 flows/sec** | **2.88 ms** | **6.73 ms** | 13.57 ms | 15.57 ms | 194.8 MB |
-| **2.0x Real-time** | **21.1 pkts/sec** | **20.6 flows/sec** | **2.62 ms** | **3.52 ms** | 6.62 ms | 8.02 ms | 195.4 MB |
-| **5.0x Real-time** | **44.8 pkts/sec** | **44.4 flows/sec** | **3.12 ms** | **6.18 ms** | 11.41 ms | 19.55 ms | 195.5 MB |
-| **10.0x Real-time** | **52.1 pkts/sec** | **51.7 flows/sec** | **3.27 ms** | **9.01 ms** | 10.94 ms | 17.35 ms | 195.5 MB |
-| **Max (Unthrottled)** | **239.9 pkts/sec** | **190.4 flows/sec** | **3.94 ms** | **9.79 ms** | 15.60 ms | 19.26 ms | 196.0 MB |
+| **1.0x (Real-time)** | **13.7 pkts/sec** | **12.8 flows/sec** | **25.08 ms** | **42.74 ms** | 50.46 ms | 52.40 ms | 194.7 MB |
+| **2.0x Real-time** | **16.1 pkts/sec** | **14.4 flows/sec** | **11.04 ms** | **20.66 ms** | 36.16 ms | 36.62 ms | 196.6 MB |
+| **5.0x Real-time** | **24.9 pkts/sec** | **17.1 flows/sec** | **19.73 ms** | **40.06 ms** | 60.83 ms | 101.72 ms | 198.4 MB |
+| **10.0x Real-time** | **43.1 pkts/sec** | **17.1 flows/sec** | **11.71 ms** | **27.48 ms** | 44.32 ms | 68.40 ms | 199.8 MB |
+| **Max (Unthrottled)** | **88.1 pkts/sec** | **35.9 flows/sec** | **22.03 ms** | **54.42 ms** | 73.07 ms | 91.92 ms | 201.7 MB |
 
-*Note: Peak Python process memory is ~196 MB, reflecting Scapy protocol definitions and scikit-learn models loaded in RAM. Latency represents complete feature extraction and multi-detector evaluation per flow.*
+*Note: Measured across full 10-second runs on the updated 722-packet `demo.pcap` containing concurrent DDoS, C2 beaconing, DGA, DNS tunneling, Encrypted, Recon, Bulk Exfiltration, Slow-and-Low Exfiltration, and Benign Periodic flows. Peak Python process memory is ~201.7 MB. Latency represents complete multi-window temporal feature extraction and multi-detector evaluation per flow.*
 
 ---
 

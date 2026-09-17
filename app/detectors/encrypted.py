@@ -69,7 +69,7 @@ class EncryptedTrafficDetector(BaseDetector):
 
         # Timing & Behavioral features
         timestamps = flow_features.get("timestamps", [])
-        _, _, cv, periodicity = compute_timing_stats(timestamps) if len(timestamps) >= 3 else (0.0, 0.0, 1.0, 0.0)
+        mean_iat, _, cv, periodicity = compute_timing_stats(timestamps) if len(timestamps) >= 3 else (0.0, 0.0, 1.0, 0.0)
 
         outbound_ratio = flow_features.get("outbound_inbound_byte_ratio", 1.0)
         packet_lengths = flow_features.get("packet_lengths", [])
@@ -87,8 +87,8 @@ class EncryptedTrafficDetector(BaseDetector):
         evidence_signals: List[str] = []
 
         # Behavioral Anomaly Checks
-        # 1. Periodic automated intervals
-        if periodicity >= self.periodicity_threshold:
+        # 1. Periodic automated intervals (C2 check-in polling requires meaningful inter-checkin interval >= 0.5s)
+        if periodicity >= self.periodicity_threshold and mean_iat >= 0.5:
             suspicious_behavior_count += 1
             evidence_signals.append(f"Periodic interval score {periodicity:.2f} (CV: {cv:.4f})")
 
@@ -119,8 +119,8 @@ class EncryptedTrafficDetector(BaseDetector):
             if suspicious_ja3:
                 evidence_signals.append(f"Observed JA3 signature ({ja3_hash}) matches known adversary framework catalog")
 
-            # Direct IP TLS without SNI
-            if not has_sni and len(packet_lengths) >= 4 and dst_port == 443:
+            # Direct IP TLS without SNI (requires actual observed TLS Client Hello)
+            if bool(tls_meta) and not has_sni and len(packet_lengths) >= 4 and dst_port == 443:
                 suspicious_behavior_count += 1
                 evidence_signals.append("Direct IP TLS handshake without Server Name Indication (SNI)")
 

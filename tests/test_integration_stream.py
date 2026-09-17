@@ -10,6 +10,7 @@ import pytest
 from app.alerts.generator import AlertPipeline
 from app.features.flow_features import FlowFeatureExtractor
 from app.ingest.flow_stream import FlowStreamManager
+from app.ingest.replay import PCAPReplayEngine
 from app.ingest.sources import PcapReplaySource, SyntheticStreamSource
 from app.storage.database import ThreatDatabase
 
@@ -67,6 +68,11 @@ def test_full_pipeline_with_synthetic_stream(tmp_path):
 
 
 def test_full_pipeline_with_pcap_replay(tmp_path):
+    """
+    End-to-end integration test exercising:
+    PCAP -> Replay -> Flow Assembly -> Feature Extraction -> Detectors -> Threat Fusion -> Alerts & DB.
+    Validates that the exfiltration scenario in demo.pcap correctly triggers DATA_EXFILTRATION with forensic evidence.
+    """
     pcap_path = "data/sample/demo.pcap"
     if not Path(pcap_path).exists():
         pytest.skip(f"PCAP {pcap_path} not found.")
@@ -74,29 +80,63 @@ def test_full_pipeline_with_pcap_replay(tmp_path):
     test_db_path = str(tmp_path / "test_pcap_integration.db")
     db = ThreatDatabase(test_db_path)
 
-    pipeline = AlertPipeline(db=db)
-    flow_manager = FlowStreamManager(flow_timeout_sec=2.0, sliding_window_sec=2.0)
-    source = PcapReplaySource(pcap_path=pcap_path, speed=0.0)
+    engine = PCAPReplayEngine(
+        pcap_path=pcap_path,
+        speed=0.0,
+        flow_timeout=2.0,
+        sliding_window=2.0,
+        db_path=test_db_path
+    )
+    engine.run()
 
-    alert_count = 0
-    pipeline.subscribe(lambda a: None)
+    # Query flows and alerts from database
+    flows = db.get_flows(limit=500)
+    alerts = db.get_alerts(limit=500)
 
-    for event in source.stream_events():
-        pkt_dict = event.to_dict()
-        active_flow, expired_flows = flow_manager.process_packet(pkt_dict)
-
-        for flow_dict in expired_flows:
-            features = FlowFeatureExtractor.extract_features(flow_dict)
-            features["input_source"] = flow_dict.get("source_type", "pcap_replay")
-            pipeline.process_flow(features)
-
-    remaining = flow_manager.flush_all()
-    for flow_dict in remaining:
-        features = FlowFeatureExtractor.extract_features(flow_dict)
-        features["input_source"] = flow_dict.get("source_type", "pcap_replay")
-        pipeline.process_flow(features)
-
-    db.flush_buffers()
-    flows = db.get_flows(limit=50)
-    assert len(flows) > 0
+    assert len(flows) > 0, "No flows recorded from PCAP"
     assert any(f.get("input_source") == "pcap_replay" for f in flows)
+
+    assert len(alerts) > 0, "No alerts generated from PCAP replay"
+    alert_classes = {a["threat_class"] for a in alerts}
+
+    # Verify DATA_EXFILTRATION is generated from actual flow features
+    assert "DATA_EXFILTRATION" in alert_classes, (
+        f"DATA_EXFILTRATION alert missing from demo PCAP replay. Alerts generated: {alert_classes}"
+    )
+
+    # Verify both BULK and SLOW_AND_LOW exfiltration alerts are generated
+    exfil_alerts = [a for a in alerts if a["threat_class"] == "DATA_EXFILTRATION"]
+    assert len(exfil_alerts) >= 2, f"Expected at least 2 exfiltration alerts, got {len(exfil_alerts)}"
+
+    # 1. Bulk exfiltration verification (10.0.0.22 -> 203.0.113.80:443)
+    bulk_alerts = [a for a in exfil_alerts if a["src_ip"] == "10.0.0.22" and a["dst_ip"] == "203.0.113.80"]
+    assert len(bulk_alerts) >= 1, "Missing bulk exfiltration alert for 10.0.0.22"
+    bulk_alert = bulk_alerts[0]
+    assert bulk_alert["dst_port"] == 443
+    assert bulk_alert["evidence"].get("subtype") in ("BULK", "COMPOSITE_EXFILTRATION")
+    assert bulk_alert["evidence"]["bytes_out"] >= 200_000
+    assert bulk_alert["evidence"]["out_in_ratio"] >= 6.0
+    assert bulk_alert["evidence"]["duration_sec"] > 0
+
+    # 2. Slow-and-low exfiltration verification (10.0.0.23 -> 203.0.113.90:443)
+    slow_alerts = [a for a in exfil_alerts if a["src_ip"] == "10.0.0.23" and a["dst_ip"] == "203.0.113.90"]
+    assert len(slow_alerts) >= 1, "Missing slow-and-low exfiltration alert for 10.0.0.23"
+    slow_alert = slow_alerts[0]
+    assert slow_alert["dst_port"] == 443
+    assert slow_alert["evidence"].get("subtype") == "SLOW_AND_LOW"
+    assert slow_alert["evidence"]["transfer_count"] >= 4
+    assert slow_alert["evidence"]["cumulative_outbound_bytes"] >= 35_000
+    assert slow_alert["evidence"]["destination_persistence"] >= 0.75
+    assert slow_alert["evidence"]["iat_cv"] <= 0.50
+    assert slow_alert["evidence"]["slow_exfiltration_score"] >= 0.65
+
+    # 3. Anti-False-Positive: 10.0.0.45 (balanced benign periodic traffic) must have zero exfiltration alerts
+    benign_exfil = [a for a in exfil_alerts if a["src_ip"] == "10.0.0.45"]
+    assert len(benign_exfil) == 0, f"False positive: benign periodic traffic alerted as exfiltration: {benign_exfil}"
+
+    # Also verify other attack classes in demo PCAP are preserved and detected
+    expected_attacks = {"DGA_DOMAIN_DETECTION", "DNS_TUNNELLING", "PORT_SCAN_HORIZONTAL"}
+    assert expected_attacks.issubset(alert_classes), (
+        f"Missing expected attack classes in demo PCAP. Found: {alert_classes}"
+    )
+

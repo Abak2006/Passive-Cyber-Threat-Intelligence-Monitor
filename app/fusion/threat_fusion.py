@@ -46,7 +46,7 @@ class ThreatFusionEngine:
 
         now_ts = flow_features.get("end_time") or time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
-        input_source = flow_features.get("source_type", "pcap_replay")
+        input_source = flow_features.get("input_source") or flow_features.get("source_type") or "pcap_replay"
 
         det_map = {d.detector: d for d in detections}
         final_alerts: List[StandardAlert] = []
@@ -203,7 +203,8 @@ class ThreatFusionEngine:
 
     def _should_emit(self, alert: StandardAlert, current_time: float) -> bool:
         """Deduplicates repetitive alerts on identical endpoints within sliding window."""
-        key = (alert.src_ip, alert.dst_ip, alert.threat_class)
+        subtype = alert.evidence.get("subtype", "")
+        key = (alert.src_ip, alert.dst_ip, alert.threat_class, subtype)
         last_time = self._dedup_cache.get(key, 0.0)
         if current_time - last_time < self.dedup_window_sec:
             return False
