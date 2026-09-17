@@ -314,11 +314,55 @@ st.markdown("""
         color: #93C5FD;
         margin-bottom: 14px;
     }
+    .detector-badge-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+    .detector-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #CBD5E1;
+    }
+    .detector-pill-active {
+        border-color: #059669;
+        color: #6EE7B7;
+    }
+    .input-source-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #1E293B;
+        border: 1px solid #0284C7;
+        color: #38BDF8;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 cfg = get_config()
 db = ThreatDatabase(cfg.database_path)
+
+# Determine active input source from latest records
+latest_alerts = db.get_recent_alerts(limit=1)
+latest_source = latest_alerts[0].get("input_source", "pcap_replay") if latest_alerts else "pcap_replay"
+source_labels = {
+    "pcap_replay": "PCAP Replay (Unidirectional)",
+    "synthetic_stream": "Synthetic Stream",
+    "data_diode_feed": "Data-Diode Feed (Hardware)",
+}
+source_display = source_labels.get(latest_source, latest_source.replace("_", " ").title())
 
 # ==============================================================================
 # SIDEBAR
@@ -336,7 +380,7 @@ st.sidebar.markdown("""
 """, unsafe_allow_html=True)
 
 # Non-Editable System Status Indicators
-st.sidebar.markdown("""
+st.sidebar.markdown(f"""
 <div class="sidebar-status-header">SYSTEM STATUS</div>
 <div class="sidebar-status-beacon">
     <span class="status-dot-green"></span> PASSIVE
@@ -352,6 +396,10 @@ st.sidebar.markdown("""
         <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Unidirectional</span>
     </div>
     <div class="sidebar-status-row">
+        <span class="sidebar-status-key">Active Input Source</span>
+        <span class="sidebar-status-val"><span style="color: #38BDF8;">●</span> {source_display}</span>
+    </div>
+    <div class="sidebar-status-row">
         <span class="sidebar-status-key">Ingest Mode</span>
         <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Read-only</span>
     </div>
@@ -365,6 +413,38 @@ st.sidebar.markdown("""
             <span class="sidebar-status-val" style="justify-content: flex-end;"><span style="color: #94A3B8;">●</span> Disabled</span>
             <div style="font-size: 0.68rem; color: #64748B; font-weight: 500;">Metadata Only</div>
         </div>
+    </div>
+</div>
+
+<div class="sidebar-status-header" style="margin-top: 14px;">ACTIVE DETECTORS (7/7)</div>
+<div class="sidebar-status-table">
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">DDoS (SYN/UDP/Amp)</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">C2 Beaconing</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">DGA Classifier</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">DNS Tunneling</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">Encrypted (TLS/QUIC)</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">Recon / Port Scan</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
+    </div>
+    <div class="sidebar-status-row">
+        <span class="sidebar-status-key">Data Exfiltration</span>
+        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -478,10 +558,20 @@ st.markdown("""
         <span class="arch-step-sub">AI Classifiers & Alerts</span>
     </div>
 </div>
+
+<div class="detector-badge-strip">
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DDoS (SYN, UDP, Amp, Spoofed)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> C2 Beaconing (IAT, Autocorr)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DGA Domains (Lexical RF)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DNS Tunnels (TXT/NULL Stats)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Encrypted Traffic (TLS/QUIC)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Reconnaissance (Port Scan)</span>
+    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Data Exfiltration (Asymmetry ML)</span>
+</div>
 """, unsafe_allow_html=True)
 
 # Main Navigation Tabs
-tab_monitor, tab_sandbox = st.tabs(["📊 Live Threat Monitor", "🧪 Threat Analysis Sandbox"])
+tab_monitor, tab_benchmark, tab_sandbox = st.tabs(["📊 Live Threat Monitor", "⚡ Measured Benchmarks & Telemetry", "🧪 Threat Analysis Sandbox"])
 
 # ==============================================================================
 # TAB 1: LIVE THREAT MONITOR (PASSIVE STREAMING FRAGMENT)
@@ -601,6 +691,7 @@ with tab_monitor:
                     "Threat Class": a["threat_class"],
                     "Severity": a["severity"],
                     "Confidence": f"{float(a['confidence']) * 100:.1f}%",
+                    "Input Source": a.get("input_source", "pcap_replay"),
                     "Observed Flow (Unidirectional)": f"{a['src_ip']}:{a['src_port']} → {a['dst_ip']}:{a['dst_port']}",
                     "Protocol": a["protocol"],
                     "Detector": a["detector"],
@@ -647,7 +738,8 @@ with tab_monitor:
                             <span style="color: #64748B;">Flow:</span> <code>""" + f"{selected_alert['src_ip']}:{selected_alert['src_port']} → {selected_alert['dst_ip']}:{selected_alert['dst_port']}" + """</code>
                         </div>
                         <hr style="border: 0; border-top: 1px solid #1E293B; margin: 10px 0;">
-                        <div style="font-size: 0.78rem; color: #94A3B8;">Detector: <code>""" + str(selected_alert["detector"]) + """</code></div>
+                        <div style="font-size: 0.78rem; color: #94A3B8;">Input Source: <code>""" + str(selected_alert.get("input_source", "pcap_replay")) + """</code></div>
+                        <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 2px;">Detector: <code>""" + str(selected_alert["detector"]) + """</code></div>
                         <div style="font-size: 0.75rem; color: #64748B; margin-top: 4px;">Timestamp: """ + str(selected_alert["timestamp"]) + """</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -686,7 +778,173 @@ with tab_monitor:
 
 
 # ==============================================================================
-# TAB 2: THREAT ANALYSIS SANDBOX
+# TAB 2: MEASURED BENCHMARKS & TELEMETRY
+# ==============================================================================
+with tab_benchmark:
+    st.markdown('<div class="soc-section-title">Empirical Throughput & Latency Benchmarks</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-section-sub">Actual measured throughput, latency percentiles (P50/P95/P99), and resource consumption on this host</div>', unsafe_allow_html=True)
+
+    benchmark_file = Path("data/benchmark_results.json")
+    bench_data = None
+    if benchmark_file.exists():
+        try:
+            with open(benchmark_file, "r") as f:
+                bench_data = json.load(f)
+        except Exception:
+            bench_data = None
+
+    if bench_data and "runs" in bench_data and bench_data["runs"]:
+        plat = bench_data.get("platform", {})
+        ts_val = bench_data.get("timestamp", time.time())
+        ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(ts_val))
+
+        st.markdown(f"""
+        <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div><span style="color: #64748B;">Platform Host:</span> <strong style="color: #E2E8F0;">{plat.get('system', 'Unknown')} {plat.get('release', '')} ({plat.get('machine', '')})</strong></div>
+            <div><span style="color: #64748B;">Python Runtime:</span> <strong style="color: #38BDF8;">v{plat.get('python_version', sys.version.split()[0])}</strong></div>
+            <div><span style="color: #64748B;">CPU Cores:</span> <strong style="color: #10B981;">{plat.get('cpu_count', 'N/A')} logical cores</strong></div>
+            <div><span style="color: #64748B;">Target PCAP:</span> <strong style="color: #CBD5E1;">{bench_data.get('pcap_source', 'data/sample/demo.pcap')}</strong></div>
+            <div><span style="color: #64748B;">Last Measured:</span> <strong style="color: #FBBF24;">{ts_str}</strong></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        runs = bench_data["runs"]
+        latest_run = runs[-1]
+
+        # Metric Cards for latest run
+        st.markdown(f"""
+        <div class="metric-grid">
+            <div class="metric-card">
+                <div class="metric-label">INGESTION RATE</div>
+                <div class="metric-value">{latest_run['packets_per_sec']:,.1f} <span class="metric-unit">pkts/s</span></div>
+                <div class="metric-sub">{latest_run['total_packets']:,} pkts in {latest_run['duration_sec']}s</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">FLOW EVALUATION</div>
+                <div class="metric-value">{latest_run['flows_per_sec']:,.1f} <span class="metric-unit">flows/s</span></div>
+                <div class="metric-sub">{latest_run['total_flows']:,} flows evaluated</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">LATENCY P50 (MEDIAN)</div>
+                <div class="metric-value">{latest_run['latency_p50_ms']:.2f} <span class="metric-unit">ms</span></div>
+                <div class="metric-sub">Mean: {latest_run['latency_mean_ms']:.2f} ms</div>
+            </div>
+            <div class="metric-card metric-card-high">
+                <div class="metric-label">LATENCY P95</div>
+                <div class="metric-value">{latest_run['latency_p95_ms']:.2f} <span class="metric-unit">ms</span></div>
+                <div class="metric-sub">P99: {latest_run['latency_p99_ms']:.2f} ms</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">MEMORY UTILIZATION</div>
+                <div class="metric-value">{latest_run['peak_memory_mb']:.1f} <span class="metric-unit">MB</span></div>
+                <div class="metric-sub">CPU: {latest_run['cpu_percent']:.1f}%</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Multi-speed sweep charts if available
+        if len(runs) > 1:
+            df_runs = pd.DataFrame(runs)
+            st.markdown("#### Replay Rate Sweep Telemetry")
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                fig_pps = px.bar(
+                    df_runs,
+                    x="speed_setting",
+                    y="packets_per_sec",
+                    text="packets_per_sec",
+                    title="Ingestion Throughput vs Replay Rate",
+                    labels={"speed_setting": "Replay Rate", "packets_per_sec": "Packets / sec"},
+                    template="plotly_dark",
+                    color_discrete_sequence=["#0284C7"]
+                )
+                fig_pps.update_layout(height=280, paper_bgcolor="#0F172A", plot_bgcolor="#0F172A", margin=dict(l=10, r=10, t=35, b=10))
+                st.plotly_chart(fig_pps, use_container_width=True)
+
+            with col_b2:
+                fig_lat = go.Figure()
+                fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p50_ms"], mode="lines+markers", name="P50 (Median)", line=dict(color="#10B981", width=2)))
+                fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p95_ms"], mode="lines+markers", name="P95", line=dict(color="#FBBF24", width=2)))
+                fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p99_ms"], mode="lines+markers", name="P99", line=dict(color="#F87171", width=2, dash="dot")))
+                fig_lat.update_layout(
+                    title="Detection Latency Percentiles vs Replay Rate",
+                    xaxis_title="Replay Rate",
+                    yaxis_title="Latency (ms / flow)",
+                    template="plotly_dark",
+                    height=280,
+                    paper_bgcolor="#0F172A",
+                    plot_bgcolor="#0F172A",
+                    margin=dict(l=10, r=10, t=35, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_lat, use_container_width=True)
+
+            st.markdown("#### Sweep Summary Matrix")
+            display_cols = ["speed_setting", "packets_per_sec", "flows_per_sec", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms", "latency_max_ms", "peak_memory_mb", "cpu_percent"]
+            df_disp = df_runs[display_cols].rename(columns={
+                "speed_setting": "Replay Rate",
+                "packets_per_sec": "Packets/sec",
+                "flows_per_sec": "Flows/sec",
+                "latency_p50_ms": "P50 Latency (ms)",
+                "latency_p95_ms": "P95 Latency (ms)",
+                "latency_p99_ms": "P99 Latency (ms)",
+                "latency_max_ms": "Max Latency (ms)",
+                "peak_memory_mb": "Peak RSS (MB)",
+                "cpu_percent": "CPU (%)",
+            })
+            st.dataframe(df_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info("No saved benchmark results found. Run a live benchmark below to populate empirical host metrics.")
+
+    st.markdown("---")
+    st.markdown("#### Execute Live Host Benchmark")
+    col_run1, col_run2, col_run3 = st.columns([2, 1, 1])
+    with col_run1:
+        bench_src = st.selectbox("Target Stream:", ["PCAP Replay (data/sample/demo.pcap)", "In-Memory Synthetic Stream"])
+    with col_run2:
+        bench_dur = st.slider("Duration per Rate (s)", min_value=2, max_value=10, value=3)
+    with col_run3:
+        bench_mode = st.radio("Benchmark Mode", ["Single Unthrottled", "Multi-Speed Sweep (1x-max)"])
+
+    if st.button("⚡ Run Live Host Benchmark", use_container_width=True):
+        from app.benchmark import run_single_benchmark, run_sweep_benchmark
+        with st.spinner("Running real benchmark on host..."):
+            use_syn = ("Synthetic" in bench_src)
+            pcap_arg = "data/sample/demo.pcap" if not use_syn else None
+            if "Sweep" in bench_mode:
+                run_sweep_benchmark(
+                    pcap_path="data/sample/demo.pcap",
+                    duration_per_speed=float(bench_dur),
+                    output_json="data/benchmark_results.json"
+                )
+            else:
+                res = run_single_benchmark(
+                    pcap_path=pcap_arg,
+                    speed=0.0,
+                    duration=float(bench_dur),
+                    use_synthetic=use_syn,
+                )
+                with open("data/benchmark_results.json", "w") as f:
+                    import platform as pl
+                    import psutil as pu
+                    json.dump({
+                        "platform": {
+                            "system": pl.system(),
+                            "release": pl.release(),
+                            "machine": pl.machine(),
+                            "python_version": pl.python_version(),
+                            "cpu_count": pu.cpu_count(logical=True),
+                        },
+                        "pcap_source": bench_src,
+                        "timestamp": time.time(),
+                        "runs": [res]
+                    }, f, indent=2)
+        st.success("Benchmark completed! Telemetry metrics updated.")
+        st.rerun()
+
+
+# ==============================================================================
+# TAB 3: THREAT ANALYSIS SANDBOX
 # ==============================================================================
 with tab_sandbox:
     st.markdown('<div class="soc-section-title">Threat Analysis Sandbox</div>', unsafe_allow_html=True)

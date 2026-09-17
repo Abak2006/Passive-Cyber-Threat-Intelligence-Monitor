@@ -10,6 +10,7 @@ ingest:
   sliding_window_sec: 10.0
   max_active_flows: 50000
   sample_pcap_path: "data/sample/demo.pcap"
+  default_input_source: "pcap_replay"
 
 detectors:
   ddos:
@@ -18,7 +19,9 @@ detectors:
     syn_rate_threshold: 50.0          # packets/sec to a destination
     udp_rate_threshold: 80.0
     packet_rate_spike: 100.0
-    source_entropy_spoof_threshold: 3.5  # High entropy indicates spoofed sources
+    amplification_ratio_threshold: 10.0  # response / request byte ratio
+    amplification_min_bytes: 50000
+    source_entropy_spoof_threshold: 3.5  # High source entropy + rate = spoofed source suspicion
     destination_concentration_threshold: 0.8
     confidence_weight: 0.9
 
@@ -29,6 +32,7 @@ detectors:
     periodicity_score_threshold: 0.70
     jitter_tolerance: 0.30
     time_window_sec: 120.0
+    require_destination_rarity: true
 
   dga:
     enabled: true
@@ -42,8 +46,9 @@ detectors:
     enabled: true
     subdomain_length_threshold: 24
     subdomain_entropy_threshold: 3.75
-    query_frequency_threshold: 8       # queries/sec per apex
-    txt_record_ratio_threshold: 0.40
+    query_frequency_threshold: 8.0     # queries/sec per apex
+    txt_record_ratio_threshold: 0.40   # abnormal TXT query concentration
+    null_record_ratio_threshold: 0.10  # unusual NULL query presence
     unique_subdomains_threshold: 10
 
   encrypted:
@@ -52,6 +57,7 @@ detectors:
     outbound_inbound_ratio_threshold: 7.0
     periodicity_threshold: 0.70
     packet_size_anomaly_threshold: 0.75
+    quic_enabled: true
     suspicious_ja3_hashes:
       - "e7d705a3286e19ea42f587b344ee6865" # Cobalt Strike default
       - "6734f37431670b3ab4292b8faae04f7b" # Metasploit HTTPS
@@ -74,6 +80,7 @@ detectors:
     sustained_outbound_rate_bps: 2000000 # ~2 MB/s in single flow
     burst_threshold_bytes: 4000000       # 4 MB threshold in test window
     destination_novelty_score: 0.80
+    rolling_window_sec: 30.0
 
 fusion:
   correlation_window_sec: 25.0

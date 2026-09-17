@@ -1,18 +1,18 @@
-# AI-Based Detection of Cyber Threats in Unidirectional IP Traffic
+# AEGIS — AI-Powered Passive Cyber Threat Intelligence
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests Passing](https://img.shields.io/badge/tests-21%2F21%20passing-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/tests-36%2F36%20passing-brightgreen.svg)]()
 [![Enclave Security](https://img.shields.io/badge/mode-unidirectional%20passive-success.svg)]()
 
-> **National Technical Research Organisation (NTRO) — Smart India Hackathon Prototype**  
+> **AEGIS: AI-Powered Passive Cyber Threat Intelligence Platform**  
 > An autonomous, explainable Intrusion Detection and Threat Intelligence system designed for critical-infrastructure networks monitored via physical hardware data diodes and optical taps.
 
 ---
 
 ## 1. Problem Statement
 
-In critical-infrastructure networks (national defense enclaves, nuclear reactor command networks, energy grids, and air traffic control), network isolation is the first line of defense. The National Technical Research Organisation (NTRO) requires an AI-based detection system capable of monitoring IP traffic mirrored across a **unidirectional data diode** or **passive optical splitter**.
+In critical-infrastructure networks (defense enclaves, industrial control systems, energy grids, and air traffic control), network isolation is the first line of defense. High-security environments require an AI-based detection system capable of monitoring IP traffic mirrored across a **unidirectional data diode** or **passive optical splitter**.
 
 Because the monitoring enclave has **NO transmission path** back to the production network:
 1. Traffic is strictly **read-only**.
@@ -33,7 +33,7 @@ In a **unidirectional architecture**, a hardware data diode (such as a fiber-opt
 ```text
        PRODUCTION NETWORK                       MONITORING ENCLAVE
   ┌───────────────────────────┐             ┌─────────────────────────┐
-  │ Core Switches & Servers   │             │ NTRO Threat Intelligence│
+  │ Core Switches & Servers   │             │ AEGIS Threat Intelligence│
   │ (High Security OT/Gov)    │             │ (Isolated Enclave)      │
   └─────────────┬─────────────┘             └────────────▲────────────┘
                 │                                        │
@@ -191,7 +191,7 @@ python -m app.replay --pcap data/sample/demo.pcap --speed 0.0
 
 ## 9. Standard Alert Schema
 
-Every emitted alert adheres to the strict NTRO JSON schema:
+Every emitted alert adheres to the strict AEGIS JSON schema:
 
 ```json
 {
@@ -251,32 +251,28 @@ The prototype includes an automated codebase test (`tests/test_passive_guarantee
 
 Execute the benchmark suite:
 ```bash
-python -m app.benchmark --pcap data/sample/demo.pcap --duration 30
+# Single benchmark run:
+python -m app.benchmark --pcap data/sample/demo.pcap --duration 10
+
+# Multi-speed sweep (1x, 2x, 5x, 10x, max):
+python -m app.benchmark --sweep --duration 3
 ```
 
-### Actual Measured Results (Standard Development Machine):
+### Actual Measured Results (Replay Rate Sweep on Host):
 ```text
-=================================================================
-              ACTUAL MEASURED BENCHMARK RESULTS
-=================================================================
-  Test Duration:              0.91 seconds
-  Total Packets Processed:    222
-  Total Flows Evaluated:      178
-  Alerts Generated:           10
------------------------------------------------------------------
-  Ingestion Throughput:       243.5 packets/sec
-  Flow Processing Rate:       195.2 flows/sec
------------------------------------------------------------------
-  Mean Detection Latency:     4.585 ms / flow
-  P95 Detection Latency:      7.250 ms / flow
-  P99 Detection Latency:      13.593 ms / flow
-  Max Latency:                41.910 ms / flow
------------------------------------------------------------------
-  Initial Memory:             89.5 MB
-  Final Memory:               194.3 MB
-  CPU Utilization:            0.0%
-=================================================================
+==============================================================================
+                   AEGIS REPLAY RATE SWEEP SUMMARY
+==============================================================================
+Rate       | Pkts/s       | Flows/s      | P50 (ms)   | P95 (ms)   | RSS (MB)  
+------------------------------------------------------------------------------
+1.0x       | 11.7         | 11.2         | 2.877      | 6.731      | 194.8     
+2.0x       | 21.1         | 20.6         | 2.617      | 3.516      | 195.4     
+5.0x       | 44.8         | 44.4         | 3.117      | 6.181      | 195.5     
+10.0x      | 52.1         | 51.7         | 3.265      | 9.005      | 195.5     
+max (raw)  | 239.9        | 190.4        | 3.937      | 9.790      | 196.0     
+==============================================================================
 ```
+*Full technical details and methodology available in [docs/upgrade_report.md](docs/upgrade_report.md).*
 
 ---
 
@@ -285,8 +281,8 @@ python -m app.benchmark --pcap data/sample/demo.pcap --duration 30
 ### 1. Installation
 ```bash
 # Clone the repository
-git clone https://github.com/ntro-project/cyber-threat-detection.git
-cd cyber-threat-detection
+git clone https://github.com/Abak2006/Passive-Cyber-Threat-Intelligence-Monitor.git
+cd Passive-Cyber-Threat-Intelligence-Monitor
 
 # Install Python requirements
 pip install -r requirements.txt

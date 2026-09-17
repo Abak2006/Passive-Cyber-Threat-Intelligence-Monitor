@@ -5,6 +5,7 @@ and dispatches structured alerts to database and logging subscribers.
 """
 
 import logging
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from app.alerts.schema import StandardAlert, DetectionResult
@@ -95,7 +96,33 @@ class AlertPipeline:
         # Run Threat Fusion
         alerts = self.fusion_engine.fuse(detections, flow_features)
 
-        # Persist and notify
+        # Persist flow summary record
+        if flow_features.get("flow_id") and hasattr(self.db, "queue_flow"):
+            try:
+                from app.alerts.schema import FlowRecord
+                flow_rec = FlowRecord(
+                    flow_id=flow_features["flow_id"],
+                    start_time=flow_features.get("start_time", time.time()),
+                    end_time=flow_features.get("end_time", time.time()),
+                    src_ip=flow_features.get("src_ip", "0.0.0.0"),
+                    src_port=flow_features.get("src_port", 0),
+                    dst_ip=flow_features.get("dst_ip", "0.0.0.0"),
+                    dst_port=flow_features.get("dst_port", 0),
+                    protocol=flow_features.get("protocol", "TCP"),
+                    packet_count=flow_features.get("total_packets", 0),
+                    byte_count=flow_features.get("total_bytes", 0),
+                    duration_sec=round(flow_features.get("duration", 0.0), 4),
+                    forward_packets=flow_features.get("forward_packets", 0),
+                    backward_packets=flow_features.get("backward_packets", 0),
+                    forward_bytes=flow_features.get("forward_bytes", 0),
+                    backward_bytes=flow_features.get("backward_bytes", 0),
+                    input_source=flow_features.get("input_source", "pcap_replay"),
+                )
+                self.db.queue_flow(flow_rec)
+            except Exception as e:
+                logger.error(f"Database error saving flow: {e}")
+
+        # Persist and notify alerts
         for alert in alerts:
             try:
                 self.db.insert_alert(alert)

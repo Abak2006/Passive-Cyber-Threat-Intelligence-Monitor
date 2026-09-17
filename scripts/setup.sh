@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================================="
-echo "   NTRO Passive Threat Detection - Environment Setup"
+echo "   AEGIS Passive Threat Detection - Environment Setup"
 echo "========================================================="
 
 echo "[1/3] Installing dependencies..."

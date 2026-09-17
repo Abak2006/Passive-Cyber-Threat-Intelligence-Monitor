@@ -1,7 +1,7 @@
 """
 DNS Tunnelling & Exfiltration Threat Detector.
-Detects covert channels, encoded payloads in subdomains, and DNS data exfiltration.
-Inspects passive DNS query metadata (subdomain entropy, length, frequency, TXT records).
+Detects covert channels, base32/base64 encoded payloads in subdomains, and DNS data exfiltration.
+Inspects passive DNS query metadata, subdomain entropy, query frequency, and record-type distributions (e.g. TXT/NULL ratio spikes).
 """
 
 from typing import Any, Dict, List, Optional
@@ -15,13 +15,17 @@ class DNSTunnelDetector(BaseDetector):
         self,
         subdomain_len_threshold: int = 24,
         subdomain_entropy_threshold: float = 3.75,
-        query_frequency_threshold: float = 5.0,
-        unique_subdomains_threshold: int = 6
+        query_frequency_threshold: float = 8.0,
+        txt_ratio_threshold: float = 0.40,
+        null_ratio_threshold: float = 0.10,
+        unique_subdomains_threshold: int = 8
     ):
         super().__init__(name="dns_tunnel_detector")
         self.subdomain_len_threshold = subdomain_len_threshold
         self.subdomain_entropy_threshold = subdomain_entropy_threshold
         self.query_frequency_threshold = query_frequency_threshold
+        self.txt_ratio_threshold = txt_ratio_threshold
+        self.null_ratio_threshold = null_ratio_threshold
         self.unique_subdomains_threshold = unique_subdomains_threshold
 
     def predict(
@@ -34,13 +38,13 @@ class DNSTunnelDetector(BaseDetector):
 
         # Check sliding-window context if available
         apex_context = ctx.get("dns_tunnel_context", {})
+        rolling_metrics = ctx.get("dns_rolling_metrics", {})
         unique_subdomains = apex_context.get("unique_subdomains", len(queries))
         query_rate = apex_context.get("query_rate", 0.0)
 
-        if not queries and not apex_context.get("queries"):
-            return None
-
         all_queries = queries if queries else apex_context.get("queries", [])
+        if not all_queries and not rolling_metrics:
+            return None
 
         suspicious_query = None
         max_sub_entropy = 0.0
@@ -57,14 +61,34 @@ class DNSTunnelDetector(BaseDetector):
                 max_sub_entropy = sub_ent
                 suspicious_query = q
 
-        # Tunnel signals
-        has_long_subdomain = max_sub_len >= self.subdomain_len_threshold
-        has_high_entropy = max_sub_entropy >= self.subdomain_entropy_threshold
-        has_high_volume = (unique_subdomains >= self.unique_subdomains_threshold or
-                           query_rate >= self.query_frequency_threshold)
+        # Record-type concentration anomalies
+        txt_ratio = rolling_metrics.get("txt_ratio", 0.0)
+        null_ratio = rolling_metrics.get("null_ratio", 0.0)
 
-        # Combined check
-        is_tunnel = (has_long_subdomain and has_high_entropy) or (has_high_entropy and has_high_volume)
+        # In-flow record check if available
+        dns_type_name = str(flow_features.get("dns_type_name", "")).upper()
+        if dns_type_name == "TXT" and not txt_ratio:
+            txt_ratio = 1.0
+        elif dns_type_name == "NULL" and not null_ratio:
+            null_ratio = 1.0
+
+        # Tunnel signals
+        has_long_subdomain = (max_sub_len >= self.subdomain_len_threshold)
+        has_high_entropy = (max_sub_entropy >= self.subdomain_entropy_threshold)
+        has_high_volume = (
+            unique_subdomains >= self.unique_subdomains_threshold or
+            query_rate >= self.query_frequency_threshold
+        )
+        has_txt_anomaly = (txt_ratio >= self.txt_ratio_threshold and (has_high_entropy or max_sub_len > 15))
+        has_null_anomaly = (null_ratio >= self.null_ratio_threshold)
+
+        # Combined tunnel determination
+        is_tunnel = (
+            (has_long_subdomain and has_high_entropy) or
+            (has_high_entropy and has_high_volume) or
+            has_txt_anomaly or
+            has_null_anomaly
+        )
 
         if not is_tunnel:
             return None
@@ -72,22 +96,42 @@ class DNSTunnelDetector(BaseDetector):
         # Confidence calculation
         score = 0.0
         if has_long_subdomain:
-            score += 0.35
+            score += 0.30
         if has_high_entropy:
-            score += 0.40
+            score += 0.35
         if has_high_volume:
-            score += 0.20
+            score += 0.15
+        if has_txt_anomaly:
+            score += 0.25
+        if has_null_anomaly:
+            score += 0.30
 
-        confidence = min(0.97, max(0.70, score))
-        severity = SeverityLevel.CRITICAL if (has_long_subdomain and has_high_entropy and has_high_volume) else SeverityLevel.HIGH
+        confidence = min(0.98, max(0.70, score))
+        is_critical = (has_long_subdomain and has_high_entropy and (has_high_volume or has_txt_anomaly))
+        severity = SeverityLevel.CRITICAL if is_critical else SeverityLevel.HIGH
+
+        reasons = []
+        if has_long_subdomain:
+            reasons.append(f"Subdomain length {max_sub_len} chars exceeds threshold {self.subdomain_len_threshold}")
+        if has_high_entropy:
+            reasons.append(f"Subdomain Shannon entropy {max_sub_entropy:.2f} indicates encoded binary payload")
+        if has_txt_anomaly:
+            reasons.append(f"Abnormal TXT query concentration ({txt_ratio*100:.1f}%)")
+        if has_null_anomaly:
+            reasons.append(f"Unusual NULL record queries detected ({null_ratio*100:.1f}%)")
+        if has_high_volume:
+            reasons.append(f"High query volume ({unique_subdomains} unique subdomains, {query_rate:.1f} q/s)")
 
         evidence = {
+            "threat_diagnosis": "; ".join(reasons),
             "suspicious_query": suspicious_query,
             "subdomain_length": max_sub_len,
             "subdomain_entropy": round(max_sub_entropy, 4),
             "unique_subdomain_count": unique_subdomains,
             "query_frequency": round(query_rate, 2),
-            "is_encoded_subdomain": has_high_entropy and has_long_subdomain,
+            "txt_query_ratio": round(txt_ratio, 4),
+            "null_query_ratio": round(null_ratio, 4),
+            "is_encoded_subdomain": bool(has_high_entropy and has_long_subdomain),
         }
 
         return DetectionResult(

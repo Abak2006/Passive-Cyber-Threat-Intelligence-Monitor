@@ -1,6 +1,6 @@
-# Feature Dictionary & Extraction Reference
+# Feature Dictionary & Extraction Reference: AEGIS Platform
 
-Comprehensive reference of all passive network features extracted by the engine.
+Comprehensive reference of all passive network features extracted by the AEGIS detection engine. All features are computed strictly out-of-band without active probing, connection handshakes, or payload decryption.
 
 ---
 
@@ -10,7 +10,7 @@ Comprehensive reference of all passive network features extracted by the engine.
 | :--- | :--- | :--- |
 | `duration` | Float | Flow lifespan in seconds ($\Delta t = t_{last} - t_{first}$) |
 | `total_packets` | Integer | Total packets observed across forward and backward directions |
-| `total_bytes` | Integer | Total bytes observed |
+| `total_bytes` | Integer | Total bytes observed across both directions |
 | `packets_per_sec` | Float | Average packet ingestion rate ($\text{pkts} / \text{duration}$) |
 | `bytes_per_sec` | Float | Average byte throughput ($\text{bytes} / \text{duration}$) |
 | `forward_packets` | Integer | Packets sent from flow initiator to responder |
@@ -40,8 +40,9 @@ Comprehensive reference of all passive network features extracted by the engine.
 
 ---
 
-## 3. DNS Lexical Features (`app/features/dns_features.py`)
+## 3. DNS Lexical & Rolling Distribution Features (`app/features/dns_features.py`)
 
+### A. Static Lexical Metrics (Per Query)
 | Feature | Type | Description |
 | :--- | :--- | :--- |
 | `domain` | String | Normalized queried domain string (lowercase, stripped) |
@@ -58,28 +59,61 @@ Comprehensive reference of all passive network features extracted by the engine.
 | `max_consonant_cluster` | Integer | Longest run of consecutive consonants |
 | `is_txt_record` | Integer | 1 if query type is TXT, 0 otherwise |
 
+### B. Sliding-Window Record Type & Anomaly Metrics (`DNSRollingStats`)
+Computed over a 60-second sliding window per registered apex domain:
+| Feature | Type | Description |
+| :--- | :--- | :--- |
+| `rolling_query_count` | Integer | Total DNS queries observed for this apex in window |
+| `txt_record_ratio` | Float | Ratio of TXT queries: $\text{count(TXT)} / \text{total\_queries}$ |
+| `null_record_ratio` | Float | Ratio of NULL queries: $\text{count(NULL)} / \text{total\_queries}$ |
+| `cname_record_ratio` | Float | Ratio of CNAME queries: $\text{count(CNAME)} / \text{total\_queries}$ |
+| `rolling_subdomain_entropy` | Float | Average Shannon entropy across subdomains in window |
+| `unique_subdomains_count` | Integer | Cardinality of distinct subdomains queried under apex |
+
 ---
 
-## 4. Passive TLS/QUIC Metadata (`app/features/tls_features.py`)
+## 4. Passive TLS & QUIC Metadata (`app/features/tls_features.py`, `app/features/quic_features.py`)
 
+> [!NOTE]
+> All TLS and QUIC features are extracted exclusively from unencrypted protocol framing (Client Hello, packet headers). Zero payload decryption is performed.
+
+### A. TLS Metadata (TCP Port 443 / 8443)
 | Feature | Type | Description |
 | :--- | :--- | :--- |
 | `ja3_string` | String | Raw string: `SSLVersion,Ciphers,Extensions,EllipticCurves,ECPointFormats` |
-| `ja3_hash` | String | MD5 hash of `ja3_string` |
-| `ja4_fingerprint` | String | Clean JA4 abstraction: `t13d[ciphers][extensions]_[hash]` |
-| `tls_version` | String | Handshake TLS protocol version (e.g. `0x0303` for TLS 1.2) |
+| `ja3_hash` | String | MD5 hash of `ja3_string` matched against known C2 signatures |
+| `ja4_fingerprint` | String | JA4 abstraction: `t13d[ciphers][extensions]_[ciphers_hash]_[extensions_hash]` |
+| `tls_version` | String | Handshake TLS protocol version (e.g. `0x0303` for TLS 1.2, `0x0304` for TLS 1.3) |
 | `ciphers_count` | Integer | Total non-GREASE cipher suites offered |
 | `extensions_count` | Integer | Total non-GREASE TLS extensions offered |
-| `has_sni` | Boolean | True if Server Name Indication extension is present |
-| `splt_mean_length` | Float | Mean length of early packet burst |
+| `has_sni` | Boolean | True if Server Name Indication extension is present in Client Hello |
+| `splt_mean_length` | Float | Mean length of early packet burst (Sequence of Packet Lengths and Times) |
 | `splt_length_variance` | Float | Variance of early packet lengths |
 | `early_packet_lengths` | List[Int] | Sequence of first 10 packet lengths (SPLT prefix) |
+
+### B. QUIC Transport Framing (RFC 9000 / UDP Port 443)
+| Feature | Type | Description |
+| :--- | :--- | :--- |
+| `is_quic` | Boolean | True if packet matches RFC 9000 header structure |
+| `quic_version` | String | Hexadecimal version string (e.g. `0x00000001` for RFC 9000, `0xff00001d` for draft-29) |
+| `quic_long_header_count` | Integer | Count of packets with Long Header format (handshake establishment) |
+| `quic_short_header_count` | Integer | Count of packets with Short Header 1-RTT format (data transfer) |
+| `quic_initial_count` | Integer | Count of Initial packets observed |
+| `quic_retry_count` | Integer | Count of Retry packets observed |
+| `quic_handshake_count` | Integer | Count of Handshake packets observed |
+| `quic_scid_length` | Integer | Source Connection ID byte length |
+| `quic_dcid_length` | Integer | Destination Connection ID byte length |
 
 ---
 
 ## 5. Entropy & Distribution Metrics (`app/features/entropy.py`)
 
+Measures categorical diversity and concentration across network flows in a sliding window:
+
 | Feature | Type | Description |
 | :--- | :--- | :--- |
-| `source_entropy` | Float | Shannon entropy across observed source IPs targeting destination |
-| `destination_entropy` | Float | Shannon entropy across destination ports or IPs targeted by source |
+| `source_ip_entropy` | Float | Shannon entropy across source IPs: $-\sum p(x) \log_2 p(x)$. High value indicates IP spoofing. |
+| `destination_ip_entropy`| Float | Shannon entropy across destination IPs. High value indicates horizontal network sweep. |
+| `destination_port_entropy`| Float | Shannon entropy across destination ports. High value indicates vertical port scan. |
+| `herfindahl_index` | Float | Herfindahl-Hirschman Index (HHI) $\sum p(x)^2 \in [0.0, 1.0]$. Low value confirms dispersed spoofing; high value indicates concentrated target. |
+| `top_item_pct` | Float | Percentage of total traffic attributed to the single most frequent address/port. |

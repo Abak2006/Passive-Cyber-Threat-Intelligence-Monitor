@@ -170,3 +170,91 @@ def test_exfiltration_detector():
     assert res.threat_class == "DATA_EXFILTRATION"
     assert res.confidence >= 0.80
     assert res.evidence["outbound_inbound_ratio"] == 100.0
+
+
+def test_udp_flood_detection():
+    det = DDoSDetector(udp_rate_threshold=100.0)
+    flow = {
+        "flow_id": "UDP:198.51.100.10:45000<->10.0.0.100:9999",
+        "src_ip": "198.51.100.10",
+        "src_port": 45000,
+        "dst_ip": "10.0.0.100",
+        "dst_port": 9999,
+        "protocol": "UDP",
+        "duration": 1.0,
+        "packets_per_sec": 250.0,
+        "total_packets": 250,
+    }
+    res = det.predict(flow)
+    assert res is not None
+    assert res.threat_class == "UDP_FLOOD"
+    assert res.confidence >= 0.85
+    assert res.evidence["udp_packet_rate"] == 250.0
+
+
+def test_udp_amplification_reflection_detection():
+    det = DDoSDetector()
+    # NTP reflection from port 123 with high packet size
+    flow = {
+        "flow_id": "UDP:203.0.113.50:123<->10.0.0.5:43210",
+        "src_ip": "203.0.113.50",
+        "src_port": 123,  # NTP
+        "dst_ip": "10.0.0.5",
+        "dst_port": 43210,
+        "protocol": "UDP",
+        "duration": 1.0,
+        "packets_per_sec": 80.0,
+        "mean_packet_size": 480.0,
+    }
+    res = det.predict(flow)
+    assert res is not None
+    assert res.threat_class == "AMPLIFICATION_REFLECTION_DDOS"
+    assert res.confidence >= 0.85
+    assert res.evidence["amplification_service"] == "NTP"
+
+
+def test_spoofed_ddos_detection():
+    det = DDoSDetector()
+    flow = {
+        "flow_id": "UDP:10.0.0.1:0<->10.0.0.50:80",
+        "src_ip": "10.0.0.1",
+        "src_port": 0,
+        "dst_ip": "10.0.0.50",
+        "dst_port": 80,
+        "protocol": "UDP",
+        "packets_per_sec": 60.0,
+    }
+    context = {
+        "source_entropy": 5.2,
+        "unique_sources": 250,
+    }
+    res = det.predict(flow, context=context)
+    assert res is not None
+    assert res.threat_class == "SPOOFED_SOURCE_DDOS"
+    assert res.evidence["source_ip_entropy"] == 5.2
+
+
+def test_quic_encrypted_traffic_detection():
+    det = EncryptedTrafficDetector()
+    flow = {
+        "flow_id": "UDP:10.0.0.40:51234<->198.51.100.80:443",
+        "src_ip": "10.0.0.40",
+        "src_port": 51234,
+        "dst_ip": "198.51.100.80",
+        "dst_port": 443,
+        "protocol": "UDP",
+        "duration": 4.0,
+        "timestamps": [1.0, 2.0, 3.0, 4.0],
+        "packet_lengths": [1200, 1200, 1200, 1200],  # Constant payload size
+        "quic_metadata": {
+            "has_quic": True,
+            "version": "0x00000001",
+            "is_initial": True,
+            "header_types": ["long"],
+        },
+    }
+    res = det.predict(flow)
+    assert res is not None
+    assert res.threat_class == "SUSPICIOUS_ENCRYPTED_TRAFFIC"
+    assert res.evidence["is_quic"] is True
+

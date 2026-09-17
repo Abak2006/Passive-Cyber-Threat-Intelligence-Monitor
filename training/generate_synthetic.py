@@ -1,5 +1,5 @@
 """
-Synthetic Dataset and PCAP Generator for NTRO Cyber Threat Detection.
+Synthetic Dataset and PCAP Generator for AEGIS Cyber Threat Detection.
 Generates realistic training datasets and a multi-threat demo PCAP covering all 7 threat categories.
 Uses Scapy for packet construction with zero active network transmission.
 """

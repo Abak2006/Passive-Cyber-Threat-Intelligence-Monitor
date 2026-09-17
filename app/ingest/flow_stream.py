@@ -1,6 +1,7 @@
 """
 Stateful Sliding-Window Flow Assembler and Session Stream Manager.
-Aggregates packet streams into bidirectional flows without retaining full payloads.
+Aggregates packet streams into unidirectional and bidirectional flows without retaining full payloads.
+Passively parses TLS Client Hello and QUIC Long Header metadata without payload decryption.
 """
 
 from collections import defaultdict, deque
@@ -8,18 +9,20 @@ import time
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 from app.alerts.schema import FlowRecord
+from app.features.dns_features import DNSRollingStats, normalize_dns_type
+from app.features.quic_features import QUICFeatureExtractor
 from app.features.tls_features import TLSFeatureExtractor
 
 
 def canonical_flow_id(src_ip: str, src_port: int, dst_ip: str, dst_port: int, protocol: str) -> str:
-    """Deterministic bidirectional flow identifier."""
+    """Deterministic canonical flow identifier."""
     if (src_ip, src_port) <= (dst_ip, dst_port):
         return f"{protocol}:{src_ip}:{src_port}<->{dst_ip}:{dst_port}"
     return f"{protocol}:{dst_ip}:{dst_port}<->{src_ip}:{src_port}"
 
 
 class FlowState:
-    """Internal state tracking a single bidirectional flow."""
+    """Internal state tracking a single network flow."""
 
     def __init__(self, packet: Dict[str, Any]):
         self.flow_id = canonical_flow_id(
@@ -32,6 +35,7 @@ class FlowState:
         self.init_dst_ip = packet["dst_ip"]
         self.init_dst_port = packet["dst_port"]
         self.protocol = packet["protocol"]
+        self.source_type = packet.get("source_type", "pcap_replay")
 
         self.start_time = packet["timestamp"]
         self.last_time = packet["timestamp"]
@@ -51,7 +55,9 @@ class FlowState:
 
         # Protocol metadata
         self.dns_queries: List[str] = []
+        self.dns_types: List[str] = []
         self.tls_metadata: Optional[Dict[str, Any]] = None
+        self.quic_metadata: Optional[Dict[str, Any]] = None
 
         self.add_packet(packet)
 
@@ -81,12 +87,23 @@ class FlowState:
 
         if packet.get("dns_query"):
             self.dns_queries.append(packet["dns_query"])
+            if packet.get("dns_type"):
+                _, type_name = normalize_dns_type(packet["dns_type"])
+                self.dns_types.append(type_name)
 
-        # Passive TLS parsing on initial handshake
-        if not self.tls_metadata and packet.get("payload_bytes"):
-            tls_meta = TLSFeatureExtractor.parse_client_hello(packet["payload_bytes"])
+        # Passive TLS parsing on initial handshake (TCP)
+        payload = packet.get("payload_bytes")
+        if not self.tls_metadata and self.protocol == "TCP" and payload:
+            tls_meta = TLSFeatureExtractor.parse_client_hello(payload)
             if tls_meta:
                 self.tls_metadata = tls_meta
+
+        # Passive QUIC parsing on initial handshake (UDP 443 / 8443)
+        if not self.quic_metadata and self.protocol == "UDP" and payload:
+            if self.init_dst_port in (443, 8443, 4433) or self.init_src_port in (443, 8443, 4433):
+                quic_meta = QUICFeatureExtractor.parse_quic_packet_header(payload)
+                if quic_meta:
+                    self.quic_metadata = quic_meta
 
     @property
     def duration(self) -> float:
@@ -100,6 +117,7 @@ class FlowState:
             "dst_ip": self.init_dst_ip,
             "dst_port": self.init_dst_port,
             "protocol": self.protocol,
+            "source_type": self.source_type,
             "start_time": self.start_time,
             "end_time": self.last_time,
             "duration": self.duration,
@@ -116,7 +134,9 @@ class FlowState:
             "fin_count": self.fin_count,
             "rst_count": self.rst_count,
             "dns_queries": self.dns_queries,
+            "dns_types": self.dns_types,
             "tls_metadata": self.tls_metadata,
+            "quic_metadata": self.quic_metadata,
         }
 
     def to_flow_record(self) -> FlowRecord:
@@ -136,6 +156,7 @@ class FlowState:
             backward_packets=self.backward_packets,
             forward_bytes=self.forward_bytes,
             backward_bytes=self.backward_bytes,
+            input_source=self.source_type,
         )
 
 
@@ -152,13 +173,10 @@ class FlowStreamManager:
         self.current_time: float = 0.0
 
         # Global sliding window stats for network-wide threat correlation
-        # Destination -> deque of (timestamp, src_ip, is_syn)
         self.dest_syn_window = defaultdict(deque)
-        # Source -> deque of (timestamp, dst_ip, dst_port, is_syn)
         self.src_scan_window = defaultdict(deque)
-        # Apex domain -> deque of (timestamp, full_subdomain)
         self.dns_tunnel_window = defaultdict(deque)
-        # (src_ip, dst_ip) -> deque of connection start timestamps (for C2 beaconing)
+        self.dns_rolling_stats = DNSRollingStats(window_sec=sliding_window_sec * 3)
         self.host_pair_connections = defaultdict(deque)
 
     def process_packet(self, packet: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -225,6 +243,12 @@ class FlowStreamManager:
             while self.dns_tunnel_window[apex] and self.dns_tunnel_window[apex][0][0] < cutoff:
                 self.dns_tunnel_window[apex].popleft()
 
+            self.dns_rolling_stats.record_query(
+                query_name=domain,
+                query_type=packet.get("dns_type", "A"),
+                timestamp=ts
+            )
+
     def _check_timeouts(self, now: float) -> List[Dict[str, Any]]:
         expired = []
         timeout_cutoff = now - self.flow_timeout_sec
@@ -286,8 +310,16 @@ class FlowStreamManager:
     def get_dns_tunnel_context(self, apex_domain: str) -> Dict[str, Any]:
         """Provides sliding-window DNS query statistics for an apex domain."""
         window = self.dns_tunnel_window.get(apex_domain, [])
+        rolling = self.dns_rolling_stats.get_rolling_metrics(self.current_time)
+
         if not window:
-            return {"query_count": 0, "unique_subdomains": 0, "query_rate": 0.0, "queries": []}
+            return {
+                "query_count": 0,
+                "unique_subdomains": 0,
+                "query_rate": 0.0,
+                "queries": [],
+                "dns_rolling_metrics": rolling
+            }
 
         queries = [item[1] for item in window]
         unique_subdomains = set(queries)
@@ -298,6 +330,7 @@ class FlowStreamManager:
             "unique_subdomains": len(unique_subdomains),
             "query_rate": round(len(queries) / duration, 2),
             "queries": queries,
+            "dns_rolling_metrics": rolling,
         }
 
     def get_host_pair_connection_times(self, src_ip: str, dst_ip: str) -> List[float]:

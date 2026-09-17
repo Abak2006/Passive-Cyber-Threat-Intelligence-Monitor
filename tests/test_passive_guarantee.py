@@ -94,3 +94,33 @@ def test_no_payload_decryption():
                     violations.append(f"{py_file}:{line_no} contains decryption reference: {line.strip()}")
 
     assert not violations, f"Payload decryption routines detected: {violations}"
+
+
+def test_data_diode_strictly_receive_only_interface():
+    """Verifies that DataDiodeFeedSource exposes only receive-oriented interfaces."""
+    from app.ingest.sources import DataDiodeFeedSource
+    forbidden = ["send", "write", "transmit", "reply", "probe", "dial", "post"]
+    for attr in dir(DataDiodeFeedSource):
+        for f in forbidden:
+            assert f not in attr.lower(), f"Forbidden method '{attr}' found in DataDiodeFeedSource"
+
+
+def test_no_outbound_http_or_dns_requests_in_analytics():
+    """Verifies that no detectors, fusion, or feature extractors make outbound HTTP/DNS network requests."""
+    forbidden_modules = ["requests.", "urllib.request", "http.client", "httpx.", "aiohttp."]
+    app_dir = Path("app")
+
+    violations = []
+    for py_file in app_dir.rglob("*.py"):
+        # Exclude server entrypoint / dashboard if applicable
+        if "dashboard" in str(py_file) or "server.py" in str(py_file):
+            continue
+
+        with open(py_file, "r", encoding="utf-8") as f:
+            for line_no, line in enumerate(f, 1):
+                for fm in forbidden_modules:
+                    if fm in line and not line.strip().startswith("#"):
+                        violations.append(f"{py_file}:{line_no} references network client '{fm}': {line.strip()}")
+
+    assert not violations, f"Outbound network request libraries found in detection pipeline: {violations}"
+

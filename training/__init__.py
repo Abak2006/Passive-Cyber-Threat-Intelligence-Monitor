@@ -1,1 +1,1 @@
-"""Training and evaluation modules for NTRO cyber threat detectors."""
+"""Training and evaluation modules for AEGIS cyber threat detectors."""

@@ -1,19 +1,23 @@
 """
-Throughput and Latency Benchmarking Suite.
+AEGIS Throughput and Latency Benchmarking Suite.
 Measures real performance under continuous packet streaming:
-- Total flows processed
-- Flows/second throughput
-- Packets/second ingestion rate
-- Mean, P95, P99 detection latency
-- Alerts generated
-- CPU and Memory utilization via psutil
+- Total packets and flows processed
+- Packets/second ingestion throughput
+- Flows/second evaluation rate
+- Alerts generated and alerts/second
+- Detection latency percentiles: Mean, P50 (median), P95, P99, Max
+- CPU and RSS Memory utilization (Initial, Peak, Final, Delta) via psutil
+- Multi-speed sweeps (1x, 2x, 5x, 10x, max)
+- JSON export for UI telemetry and reproducible reporting
 """
 
 import argparse
+import json
 from pathlib import Path
+import platform
 import sys
 import time
-from typing import List
+from typing import Any, Dict, List, Optional
 import numpy as np
 import psutil
 
@@ -21,32 +25,35 @@ from app.alerts.generator import AlertPipeline
 from app.features.flow_features import FlowFeatureExtractor
 from app.ingest.flow_stream import FlowStreamManager
 from app.ingest.pcap_reader import StreamingPCAPReader
+from app.ingest.sources import PcapReplaySource, SyntheticStreamSource
 from app.storage.database import ThreatDatabase
 
 
-def run_benchmark(pcap_path: str, duration: int = 60, max_packets: int = None):
-    print("=" * 65)
-    print("      NTRO UNIDIRECTIONAL THREAT DETECTION - BENCHMARK")
-    print(f"      Target PCAP: {pcap_path}")
-    print(f"      Max Duration: {duration}s")
-    print("=" * 65)
-
+def run_single_benchmark(
+    pcap_path: Optional[str] = None,
+    speed: float = 0.0,
+    duration: float = 30.0,
+    max_packets: Optional[int] = None,
+    loop: bool = True,
+    use_synthetic: bool = False,
+    synthetic_count: int = 5000,
+    db_path: str = "data/benchmark_test.db",
+) -> Dict[str, Any]:
+    """
+    Executes a single benchmark run and returns measured performance metrics.
+    speed=0.0 denotes maximum unthrottled throughput.
+    """
     proc = psutil.Process()
     initial_mem_mb = proc.memory_info().rss / (1024 * 1024)
+    peak_mem_mb = initial_mem_mb
 
-    # In-memory temporary database for benchmark to isolate pure detection throughput
-    db = ThreatDatabase("data/benchmark_test.db")
+    db = ThreatDatabase(db_path)
     db.clear_data()
 
     pipeline = AlertPipeline(db=db)
     flow_manager = FlowStreamManager(flow_timeout_sec=5.0, sliding_window_sec=5.0)
 
-    reader = StreamingPCAPReader(pcap_path)
-
-    total_packets = 0
-    total_flows = 0
     total_alerts = 0
-    latencies: List[float] = []
 
     def alert_tracker(alert):
         nonlocal total_alerts
@@ -54,10 +61,41 @@ def run_benchmark(pcap_path: str, duration: int = 60, max_packets: int = None):
 
     pipeline.subscribe(alert_tracker)
 
+    total_packets = 0
+    total_flows = 0
+    latencies_ms: List[float] = []
+
+    # Configure packet generator
+    def packet_generator():
+        if use_synthetic:
+            source = SyntheticStreamSource(count=synthetic_count, interval_sec=0.0)
+            for event in source.stream_events():
+                yield event.to_dict()
+        else:
+            if not pcap_path or not Path(pcap_path).exists():
+                raise FileNotFoundError(f"PCAP file not found: {pcap_path}")
+            
+            while True:
+                reader = StreamingPCAPReader(pcap_path)
+                packet_count_in_pass = 0
+                prev_time = None
+                for pkt in reader.stream_packets():
+                    packet_count_in_pass += 1
+                    if speed > 0.0 and prev_time is not None:
+                        delta = (pkt["timestamp"] - prev_time) / speed
+                        if 0.0001 < delta < 0.5:
+                            time.sleep(delta)
+                    prev_time = pkt["timestamp"]
+                    yield pkt
+                
+                # If not looping or no packets found, terminate generator
+                if not loop or packet_count_in_pass == 0:
+                    break
+
     start_time = time.perf_counter()
     stop_time = start_time + duration
 
-    for packet in reader.stream_packets():
+    for packet in packet_generator():
         total_packets += 1
         now = time.perf_counter()
         if now >= stop_time:
@@ -65,6 +103,7 @@ def run_benchmark(pcap_path: str, duration: int = 60, max_packets: int = None):
 
         active_flow, expired_flows = flow_manager.process_packet(packet)
 
+        # Process expired flows
         for flow_dict in expired_flows:
             t0 = time.perf_counter()
             features = FlowFeatureExtractor.extract_features(flow_dict)
@@ -77,89 +116,231 @@ def run_benchmark(pcap_path: str, duration: int = 60, max_packets: int = None):
 
             pipeline.process_flow(features)
             t1 = time.perf_counter()
-            latencies.append((t1 - t0) * 1000.0)  # ms
+            latencies_ms.append((t1 - t0) * 1000.0)
             total_flows += 1
 
-        if active_flow["total_packets"] in (5, 15, 30):
+        # Checkpoint active flows periodically for early detection
+        if active_flow.get("total_packets") in (5, 15, 30):
             t0 = time.perf_counter()
             features = FlowFeatureExtractor.extract_features(active_flow)
             pipeline.process_flow(features)
             t1 = time.perf_counter()
-            latencies.append((t1 - t0) * 1000.0)
+            latencies_ms.append((t1 - t0) * 1000.0)
+
+        # Sample memory periodically to capture peak
+        if total_packets % 250 == 0:
+            current_mem = proc.memory_info().rss / (1024 * 1024)
+            if current_mem > peak_mem_mb:
+                peak_mem_mb = current_mem
 
         if max_packets and total_packets >= max_packets:
             break
 
-    # Flush remaining
+    # Flush any remaining flows
     remaining = flow_manager.flush_all()
     for flow_dict in remaining:
         t0 = time.perf_counter()
         features = FlowFeatureExtractor.extract_features(flow_dict)
         pipeline.process_flow(features)
         t1 = time.perf_counter()
-        latencies.append((t1 - t0) * 1000.0)
+        latencies_ms.append((t1 - t0) * 1000.0)
         total_flows += 1
 
     end_time = time.perf_counter()
-    elapsed_total = max(0.0001, end_time - start_time)
+    elapsed = max(0.0001, end_time - start_time)
 
     final_mem_mb = proc.memory_info().rss / (1024 * 1024)
-    cpu_percent = proc.cpu_percent(interval=0.1)
+    peak_mem_mb = max(peak_mem_mb, final_mem_mb)
+    cpu_percent = proc.cpu_percent(interval=0.05)
 
-    # Compute latency statistics
-    if latencies:
-        arr_lat = np.array(latencies)
-        mean_lat = float(np.mean(arr_lat))
-        p95_lat = float(np.percentile(arr_lat, 95))
-        p99_lat = float(np.percentile(arr_lat, 99))
-        max_lat = float(np.max(arr_lat))
+    if latencies_ms:
+        arr = np.array(latencies_ms)
+        mean_lat = float(np.mean(arr))
+        p50_lat = float(np.percentile(arr, 50))
+        p95_lat = float(np.percentile(arr, 95))
+        p99_lat = float(np.percentile(arr, 99))
+        max_lat = float(np.max(arr))
     else:
-        mean_lat = p95_lat = p99_lat = max_lat = 0.0
+        mean_lat = p50_lat = p95_lat = p99_lat = max_lat = 0.0
 
-    fps = total_flows / elapsed_total
-    pps = total_packets / elapsed_total
+    pps = total_packets / elapsed
+    fps = total_flows / elapsed
+    aps = total_alerts / elapsed
 
-    print("\n" + "=" * 65)
-    print("              ACTUAL MEASURED BENCHMARK RESULTS")
-    print("=" * 65)
-    print(f"  Test Duration:              {elapsed_total:.2f} seconds")
-    print(f"  Total Packets Processed:    {total_packets:,}")
-    print(f"  Total Flows Evaluated:      {total_flows:,}")
-    print(f"  Alerts Generated:           {total_alerts:,}")
-    print("-" * 65)
-    print(f"  Ingestion Throughput:       {pps:,.1f} packets/sec")
-    print(f"  Flow Processing Rate:       {fps:,.1f} flows/sec")
-    print("-" * 65)
-    print(f"  Mean Detection Latency:     {mean_lat:.3f} ms / flow")
-    print(f"  P95 Detection Latency:      {p95_lat:.3f} ms / flow")
-    print(f"  P99 Detection Latency:      {p99_lat:.3f} ms / flow")
-    print(f"  Max Latency:                {max_lat:.3f} ms / flow")
-    print("-" * 65)
-    print(f"  Initial Memory:             {initial_mem_mb:.1f} MB")
-    print(f"  Final Memory:               {final_mem_mb:.1f} MB (Delta: {final_mem_mb - initial_mem_mb:+.1f} MB)")
-    print(f"  CPU Utilization:            {cpu_percent:.1f}%")
-    print("=" * 65)
+    result = {
+        "speed_setting": "max (unthrottled)" if speed <= 0.0 else f"{speed}x",
+        "speed_factor": speed,
+        "duration_sec": round(elapsed, 3),
+        "total_packets": total_packets,
+        "total_flows": total_flows,
+        "total_alerts": total_alerts,
+        "packets_per_sec": round(pps, 1),
+        "flows_per_sec": round(fps, 1),
+        "alerts_per_sec": round(aps, 2),
+        "latency_mean_ms": round(mean_lat, 3),
+        "latency_p50_ms": round(p50_lat, 3),
+        "latency_p95_ms": round(p95_lat, 3),
+        "latency_p99_ms": round(p99_lat, 3),
+        "latency_max_ms": round(max_lat, 3),
+        "initial_memory_mb": round(initial_mem_mb, 1),
+        "peak_memory_mb": round(peak_mem_mb, 1),
+        "final_memory_mb": round(final_mem_mb, 1),
+        "memory_delta_mb": round(final_mem_mb - initial_mem_mb, 1),
+        "cpu_percent": round(cpu_percent, 1),
+    }
 
-    # Cleanup benchmark DB
+    # Cleanup temporary test DB
     try:
-        Path("data/benchmark_test.db").unlink(missing_ok=True)
+        Path(db_path).unlink(missing_ok=True)
     except Exception:
         pass
 
+    return result
+
+
+def print_single_result(res: Dict[str, Any]):
+    print("\n" + "=" * 68)
+    print(f"      AEGIS BENCHMARK RUN [{res['speed_setting'].upper()}]")
+    print("=" * 68)
+    print(f"  Test Duration:              {res['duration_sec']:.2f} seconds")
+    print(f"  Total Packets Ingested:     {res['total_packets']:,}")
+    print(f"  Total Flows Evaluated:      {res['total_flows']:,}")
+    print(f"  Alerts Generated:           {res['total_alerts']:,}")
+    print("-" * 68)
+    print(f"  Ingestion Throughput:       {res['packets_per_sec']:,.1f} packets/sec")
+    print(f"  Flow Evaluation Rate:       {res['flows_per_sec']:,.1f} flows/sec")
+    print(f"  Alert Generation Rate:      {res['alerts_per_sec']:,.2f} alerts/sec")
+    print("-" * 68)
+    print(f"  Latency P50 (Median):       {res['latency_p50_ms']:.3f} ms / flow")
+    print(f"  Latency Mean:               {res['latency_mean_ms']:.3f} ms / flow")
+    print(f"  Latency P95:                {res['latency_p95_ms']:.3f} ms / flow")
+    print(f"  Latency P99:                {res['latency_p99_ms']:.3f} ms / flow")
+    print(f"  Latency Max:                {res['latency_max_ms']:.3f} ms / flow")
+    print("-" * 68)
+    print(f"  Initial Memory (RSS):       {res['initial_memory_mb']:.1f} MB")
+    print(f"  Peak Memory (RSS):          {res['peak_memory_mb']:.1f} MB")
+    print(f"  Final Memory (RSS):         {res['final_memory_mb']:.1f} MB (Delta: {res['memory_delta_mb']:+.1f} MB)")
+    print(f"  CPU Utilization:            {res['cpu_percent']:.1f}%")
+    print("=" * 68)
+
+
+def run_sweep_benchmark(
+    pcap_path: str,
+    duration_per_speed: float = 5.0,
+    speeds: Optional[List[float]] = None,
+    output_json: Optional[str] = "data/benchmark_results.json",
+) -> List[Dict[str, Any]]:
+    if speeds is None:
+        speeds = [1.0, 2.0, 5.0, 10.0, 0.0]
+
+    print("=" * 72)
+    print("      AEGIS PASSIVE THREAT INTELLIGENCE - MULTI-SPEED SWEEP")
+    print(f"      Target PCAP: {pcap_path}")
+    print(f"      Speeds to evaluate: {[('max' if s == 0 else f'{s}x') for s in speeds]}")
+    print("=" * 72)
+
+    results = []
+    for s in speeds:
+        label = "max (unthrottled)" if s == 0.0 else f"{s}x"
+        print(f"\n[*] Running benchmark at rate: {label} for {duration_per_speed}s...")
+        res = run_single_benchmark(
+            pcap_path=pcap_path,
+            speed=s,
+            duration=duration_per_speed,
+            loop=True,
+        )
+        print_single_result(res)
+        results.append(res)
+
+    # Print summary table
+    print("\n" + "=" * 78)
+    print("                   AEGIS REPLAY RATE SWEEP SUMMARY")
+    print("=" * 78)
+    header = f"{'Rate':<10} | {'Pkts/s':<12} | {'Flows/s':<12} | {'P50 (ms)':<10} | {'P95 (ms)':<10} | {'RSS (MB)':<10}"
+    print(header)
+    print("-" * 78)
+    for r in results:
+        line = (
+            f"{r['speed_setting']:<10} | "
+            f"{r['packets_per_sec']:<12,.1f} | "
+            f"{r['flows_per_sec']:<12,.1f} | "
+            f"{r['latency_p50_ms']:<10.3f} | "
+            f"{r['latency_p95_ms']:<10.3f} | "
+            f"{r['final_memory_mb']:<10.1f}"
+        )
+        print(line)
+    print("=" * 78)
+
+    if output_json:
+        save_data = {
+            "platform": {
+                "system": platform.system(),
+                "release": platform.release(),
+                "machine": platform.machine(),
+                "python_version": platform.python_version(),
+                "cpu_count": psutil.cpu_count(logical=True),
+            },
+            "pcap_source": pcap_path,
+            "timestamp": time.time(),
+            "runs": results,
+        }
+        out_path = Path(output_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f:
+            json.dump(save_data, f, indent=2)
+        print(f"[+] Benchmark results saved to {output_json}")
+
+    return results
+
 
 def main():
-    parser = argparse.ArgumentParser(description="NTRO Threat Detection Throughput Benchmark")
+    parser = argparse.ArgumentParser(description="AEGIS Passive Threat Detection Benchmark Suite")
     parser.add_argument("--pcap", type=str, default="data/sample/demo.pcap", help="PCAP path")
-    parser.add_argument("--duration", type=int, default=60, help="Benchmark duration in seconds")
+    parser.add_argument("--duration", type=float, default=10.0, help="Benchmark duration in seconds")
+    parser.add_argument("--speed", type=float, default=0.0, help="Speed multiplier (0.0 = max rate)")
     parser.add_argument("--max-packets", type=int, default=None, help="Max packets to benchmark")
+    parser.add_argument("--loop", action="store_true", default=True, help="Loop over PCAP until duration completes")
+    parser.add_argument("--no-loop", action="store_false", dest="loop", help="Do not loop over PCAP")
+    parser.add_argument("--sweep", action="store_true", help="Execute multi-speed sweep (1x, 2x, 5x, 10x, max)")
+    parser.add_argument("--synthetic", action="store_true", help="Benchmark using synthetic packet stream")
+    parser.add_argument("--output-json", type=str, default="data/benchmark_results.json", help="Path to save JSON benchmark summary")
     args = parser.parse_args()
 
-    pcap_path = Path(args.pcap)
-    if not pcap_path.exists():
-        print(f"[-] PCAP {pcap_path} not found.")
-        sys.exit(1)
+    if args.sweep:
+        run_sweep_benchmark(
+            pcap_path=args.pcap,
+            duration_per_speed=args.duration if args.duration < 15 else 5.0,
+            output_json=args.output_json,
+        )
+    else:
+        res = run_single_benchmark(
+            pcap_path=args.pcap,
+            speed=args.speed,
+            duration=args.duration,
+            max_packets=args.max_packets,
+            loop=args.loop,
+            use_synthetic=args.synthetic,
+        )
+        print_single_result(res)
 
-    run_benchmark(str(pcap_path), duration=args.duration, max_packets=args.max_packets)
+        if args.output_json:
+            save_data = {
+                "platform": {
+                    "system": platform.system(),
+                    "release": platform.release(),
+                    "machine": platform.machine(),
+                    "python_version": platform.python_version(),
+                    "cpu_count": psutil.cpu_count(logical=True),
+                },
+                "pcap_source": args.pcap if not args.synthetic else "synthetic_stream",
+                "timestamp": time.time(),
+                "runs": [res],
+            }
+            out_path = Path(args.output_json)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(out_path, "w") as f:
+                json.dump(save_data, f, indent=2)
+            print(f"[+] Benchmark results saved to {args.output_json}")
 
 
 if __name__ == "__main__":
