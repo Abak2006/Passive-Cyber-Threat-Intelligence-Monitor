@@ -117,3 +117,42 @@ Measures categorical diversity and concentration across network flows in a slidi
 | `destination_port_entropy`| Float | Shannon entropy across destination ports. High value indicates vertical port scan. |
 | `herfindahl_index` | Float | Herfindahl-Hirschman Index (HHI) $\sum p(x)^2 \in [0.0, 1.0]$. Low value confirms dispersed spoofing; high value indicates concentrated target. |
 | `top_item_pct` | Float | Percentage of total traffic attributed to the single most frequent address/port. |
+
+---
+
+## 6. Data Exfiltration Features (`app/detectors/exfiltration.py`)
+
+### A. Bulk Volumetric & Rate Features
+Passive volumetric, rate, and directional asymmetry features evaluated for outbound bulk transfers:
+
+| Feature | Type | Description |
+| :--- | :--- | :--- |
+| `bytes_out` | Integer | Total bytes transferred in forward direction ($\text{src} \rightarrow \text{dst}$) |
+| `bytes_in` | Integer | Total bytes transferred in backward direction ($\text{dst} \rightarrow \text{src}$) |
+| `out_in_ratio` | Float | Safe directional ratio: $\text{bytes\_out} / \max(1, \text{bytes\_in})$. High value indicates extreme asymmetry |
+| `outbound_rate_bytes_per_sec` | Float | Sustained outbound throughput: $\text{bytes\_out} / \text{duration}$ |
+| `duration_sec` | Float | Active flow duration over which the transfer occurred |
+| `destination_frequency` | Integer | Cardinality of sessions to the external destination in active observation window |
+| `ratio_threshold_configured` | Float | Configured prototype threshold for volumetric asymmetry (default $6.0\times$) |
+| `ml_anomaly_detected` | Boolean | True if unsupervised Isolation Forest scores flow outside benign baseline distribution |
+
+### B. Stateful Multi-Window Slow-and-Low Features
+Features computed across sliding temporal windows (60s, 300s, 900s, 3600s) to detect low-and-slow data exfiltration staged over time:
+
+| Feature | Type | Description |
+| :--- | :--- | :--- |
+| `window_seconds` | Integer | Active temporal aggregation window in seconds (60, 300, 900, or 3600) |
+| `transfer_count` | Integer | Number of discrete outbound flows initiated by the source within the window |
+| `cumulative_outbound_bytes` | Integer | Total outbound payload bytes staged across all flows in the window |
+| `cumulative_inbound_bytes` | Integer | Total inbound acknowledgment payload bytes across the window |
+| `outbound_inbound_ratio` | Float | Multi-flow cumulative ratio $\sum B_{out} / \max(1, \sum B_{in})$ with zero-inbound bounds |
+| `average_transfer_bytes` | Float | Mean outbound transfer size across active flows |
+| `min_transfer_bytes` / `max_transfer_bytes` | Integer | Minimum and maximum transfer sizes observed in the window |
+| `mean_interarrival_seconds` | Float | Mean inter-arrival time (IAT) between staged transfers |
+| `iat_cv` | Float | Coefficient of variation ($CV = \sigma / \mu$) of inter-arrival times. Values $< 0.50$ indicate consistent automated staging |
+| `destination_persistence` | Float | Fraction of total transfers directed to the single dominant destination $[0.0, 1.0]$ |
+| `dominant_destination` | String | External endpoint (`IP:Port`) receiving the majority of staged transfers |
+| `unique_destinations` | Integer | Count of distinct destinations contacted by the internal host in the window |
+| `slow_exfiltration_score` | Float | Normalized composite score $[0.0, 1.0]$ synthesizing volume, asymmetry, persistence, timing regularity, and frequency |
+
+

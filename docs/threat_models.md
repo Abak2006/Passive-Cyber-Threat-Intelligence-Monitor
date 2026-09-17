@@ -150,21 +150,83 @@ All detection models operate strictly on passively observed packet headers, tran
 
 ## 7. Data Exfiltration
 
-- **Threat Description**: Unauthorized transfer of sensitive data, database archives, or classified documents across monitored enclave boundaries.
-- **Passive Indicators**:
-  - **Severe Directional Asymmetry**: Outbound-to-inbound byte ratio exceeding $6.0:1$.
-  - **High Sustained Outbound Throughput**: Outbound transfer rate exceeding $2.0$ MB/s in a single session.
-  - **Unsupervised Anomaly Model**: Isolation Forest model scoring on flow byte volume and duration.
+- **Threat Description**: Unauthorized transfer of sensitive documents, database dumps, or intellectual property across monitored enclave boundaries.
+- **Detection Method**: AEGIS employs a dual-path detection engine that evaluates both single-flow volumetric exfiltration (Bulk) and stateful rolling temporal patterns (Slow-and-Low) without decrypting payload data.
+
+### 7.1 Bulk / High-Volume Data Exfiltration
+
+- **Attack Profile**: Adversary performs single-session bulk staging or rapid archival uploads that overwhelm typical outbound baselines.
+- **Multi-Signal Passive Indicators**:
+  - **Asymmetric Volume**: Outbound-to-inbound byte ratio exceeding configured threshold ($\ge 6.0:1$) with minimum outbound bytes ($\ge 200\text{ KB}$). Safe bounded ratio prevents division-by-zero on pure egress feeds.
+  - **Sustained Outbound Rate**: Outbound throughput exceeding configured threshold ($\ge 1.0\text{ MB/s}$) over minimum duration ($\ge 0.5\text{s}$) with directional bias ($\text{ratio} \ge 2.0$) to distinguish exfiltration from balanced duplex downloads.
+  - **Large Burst Volume**: Outbound byte volume exceeding burst threshold ($\ge 2.0\text{ MB}$) with directional asymmetry ($\text{ratio} \ge 2.0$).
+  - **Destination Persistence**: Repeated connections or persistent flow initiation to the same external destination.
+  - **Unsupervised Anomaly Scoring**: Isolation Forest model scoring on flow byte volume, rates, and duration.
+- **Subtype Output**: Emitted as `subtype: "BULK"` with confidence bounded between $0.50$ and $0.98$:
+  $$\text{Confidence} = \text{Base} (0.65) + \text{Asymmetry} (\le 0.12) + \text{Volume} (\le 0.10) + \text{Rate} (\le 0.08) + \text{Persistence} (\le 0.05) + \text{ML Anomaly} (\le 0.06)$$
 - **Explainable Evidence Output**:
   ```json
   {
-    "outbound_bytes": 35000000,
-    "inbound_bytes": 1024,
-    "outbound_inbound_ratio": 3417.9,
-    "outbound_rate_bytes_per_sec": 8235000.0,
-    "isolation_forest_anomaly": true
+    "subtype": "BULK",
+    "threat_diagnosis": "Upload ratio (1171.77x) exceeds asymmetry threshold (6.0x) with 503.5 KB transferred; Unsupervised Isolation Forest anomaly score (0.729) exceeds threshold",
+    "bytes_out": 515580,
+    "bytes_in": 440,
+    "out_in_ratio": 1171.77,
+    "outbound_inbound_ratio": 1171.77,
+    "outbound_rate_bytes_per_sec": 168683.13,
+    "duration_sec": 3.06,
+    "sustained_duration_sec": 3.06,
+    "destination_frequency": 1,
+    "ratio_threshold_configured": 6.0,
+    "ml_anomaly_detected": true
   }
   ```
+
+### 7.2 Slow-and-Low Stateful Data Exfiltration
+
+- **Attack Profile**: Sophisticated adversaries evade single-flow volumetric thresholds by "drip-feeding" data: staging small, sub-threshold transfers (e.g. 8–12 KB chunks) across minutes or hours to a consistent external IP/port, often with deliberate interval jitter.
+- **Stateful Multi-Window Architecture**:
+  - The detector maintains an in-memory, time-bounded deque (`source_history`) per internal source IP, capped at 1,000 entries with automatic eviction beyond the maximum evaluation horizon (3,600s).
+  - Evaluates sliding temporal horizons: **60s**, **300s**, **900s**, and **3600s**.
+  - Deduplicates active vs expired flow records via `flow_id` to prevent multi-counting across sampling passes.
+- **Multi-Signal Confluence Heuristics**:
+  - **Transfer Count & Cumulative Volume**: Requires at least `minimum_transfers` ($\ge 4$) and cumulative outbound volume exceeding baseline ($\ge 35\text{ KB}$).
+  - **Destination Persistence ($P$)**: Evaluates the concentration of transfers to the dominant external destination:
+    $$P = \frac{\text{Transfers to Dominant Dest}}{\text{Total Transfers in Window}} \ge 0.75$$
+  - **Directional Asymmetry Ratio ($R$)**: Ratio of cumulative forward bytes to cumulative backward bytes across the window:
+    $$R = \frac{\sum B_{out}}{\max(1, \sum B_{in})} \ge 3.5$$
+    *(Safe zero-inbound bound: when $B_{in} \le 0$, ratio is clamped safely to $\min(10000.0, B_{out})$ without division-by-zero or NaN).*
+  - **Inter-Arrival Time Regularity ($CV$)**: Measures timing consistency with jitter tolerance:
+    $$CV = \frac{\sigma_{IAT}}{\mu_{IAT}} \le 0.50$$
+  - **Active Duration ($\Delta t$)**: Timespan from initial to final staged transfer in the active window.
+- **Anti-False-Positive Boundaries (Strict Negative Guarding)**:
+  - **Periodicity alone NEVER equals exfiltration**: Legitimate telemetry polling, health check-ins, or background updates exhibit low $CV$ ($\le 0.05$). However, legitimate polling produces balanced bidirectional duplex volume (e.g. request + response payload) and balanced byte ratios ($R \approx 1.0$).
+  - **Suppression Gate**: If cumulative asymmetry ratio $R < 2.0$ or destination persistence $P < 0.60$, timing regularity is strictly suppressed from contributing to threat score.
+- **Scoring & Confidence**:
+  Normalized linear combination of volume, asymmetry, persistence, timing regularity, and transfer frequency:
+  $$\text{Score} = w_{vol} S_{vol} + w_{asym} S_{asym} + w_{pers} S_{pers} + w_{time} S_{time} + w_{freq} S_{freq}$$
+  Alerts fire when $\text{Score} \ge 0.65$ with `subtype: "SLOW_AND_LOW"`.
+- **Explainable Evidence Output**:
+  ```json
+  {
+    "subtype": "SLOW_AND_LOW",
+    "threat_diagnosis": "Slow-and-low exfiltration: 6 staged transfers (57.6 KB) to persistent destination 203.0.113.90:443 over 70.0s window (ratio: 18.6x, persistence: 100.0%, IAT CV: 0.14)",
+    "active_window_sec": 300,
+    "total_transfers_in_window": 6,
+    "cumulative_bytes_out": 57600,
+    "cumulative_bytes_in": 3100,
+    "cumulative_asymmetric_ratio": 18.58,
+    "destination_persistence_ratio": 1.0,
+    "dominant_destination": "203.0.113.90:443",
+    "mean_iat_sec": 14.0,
+    "std_iat_sec": 1.96,
+    "iat_cv": 0.14,
+    "slow_exfiltration_score": 0.885,
+    "active_duration_sec": 70.0
+  }
+  ```
+
+- **Prototype Scope Notice**: Thresholds are configurable prototype parameters, not universal security constants. Detection indicates behavioral alignment with exfiltration heuristics rather than absolute attribution.
 
 ---
 

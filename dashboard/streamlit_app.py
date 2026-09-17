@@ -685,10 +685,12 @@ with tab_monitor:
         if recent_alerts:
             table_data = []
             for a in recent_alerts:
+                subtype = a["evidence"].get("subtype", a["evidence"].get("threat_subtype", "-"))
                 table_data.append({
                     "ID": a["id"],
                     "Timestamp": a["timestamp"][:19].replace("T", " "),
                     "Threat Class": a["threat_class"],
+                    "Subtype": subtype,
                     "Severity": a["severity"],
                     "Confidence": f"{float(a['confidence']) * 100:.1f}%",
                     "Input Source": a.get("input_source", "pcap_replay"),
@@ -709,9 +711,11 @@ with tab_monitor:
             def format_alert_label(alert_id: int) -> str:
                 item = alert_lookup.get(alert_id, {})
                 tc = item.get("threat_class", "UNKNOWN")
+                sub = item.get("evidence", {}).get("subtype", "")
+                sub_label = f" [{sub}]" if sub and sub != "-" else ""
                 conf = float(item.get("confidence", 0.0)) * 100
                 sev = item.get("severity", "INFO")
-                return f"#{alert_id} | [{sev}] {tc} ({conf:.1f}% conf)"
+                return f"#{alert_id} | [{sev}] {tc}{sub_label} ({conf:.1f}% conf)"
 
             selected_id = st.selectbox(
                 "Select Alert to Inspect:",
@@ -722,11 +726,16 @@ with tab_monitor:
             selected_alert = alert_lookup.get(selected_id)
             if selected_alert:
                 col_det1, col_det2 = st.columns([1, 2])
+                alert_ev = selected_alert.get("evidence", {})
+                alert_sub = alert_ev.get("subtype", alert_ev.get("threat_subtype", "STANDARD"))
                 with col_det1:
                     st.markdown("""
                     <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
                         <div style="font-size: 0.72rem; color: #94A3B8; font-weight: 700; text-transform: uppercase;">Threat Classification</div>
                         <div style="font-size: 1.15rem; font-weight: 800; color: #38BDF8; margin-top: 2px;">""" + str(selected_alert["threat_class"]) + """</div>
+                        <div style="margin-top: 4px;">
+                            <span style="background: #1E293B; color: #38BDF8; border: 1px solid #0284C7; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">SUBTYPE: """ + str(alert_sub) + """</span>
+                        </div>
                         <hr style="border: 0; border-top: 1px solid #1E293B; margin: 10px 0;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.82rem;">
                             <div><span style="color: #64748B;">Severity:</span> <strong>""" + str(selected_alert["severity"]) + """</strong></div>
@@ -744,6 +753,20 @@ with tab_monitor:
                     </div>
                     """, unsafe_allow_html=True)
                 with col_det2:
+                    if alert_sub == "SLOW_AND_LOW":
+                        st.markdown("""
+                        <div style="background: #0B132B; border: 1px solid #1C2541; border-left: 4px solid #38BDF8; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px;">
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #38BDF8; text-transform: uppercase; margin-bottom: 4px;">Stateful Slow-and-Low Temporal Profile</div>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.80rem;">
+                                <div><span style="color: #94A3B8;">Window:</span> <strong>""" + str(alert_ev.get("window_seconds", "-")) + """s</strong> (Transfers: <strong>""" + str(alert_ev.get("transfer_count", "-")) + """</strong>)</div>
+                                <div><span style="color: #94A3B8;">Cumulative Out:</span> <strong>""" + f"{int(alert_ev.get('cumulative_outbound_bytes', 0)):,}" + """ B</strong></div>
+                                <div><span style="color: #94A3B8;">Out/In Ratio:</span> <strong>""" + str(alert_ev.get("outbound_inbound_ratio", "-")) + """x</strong></div>
+                                <div><span style="color: #94A3B8;">Destination Persistence:</span> <strong>""" + f"{float(alert_ev.get('destination_persistence', 0.0))*100:.0f}%" + """</strong></div>
+                                <div><span style="color: #94A3B8;">Mean IAT:</span> <strong>""" + f"{float(alert_ev.get('mean_interarrival_seconds', 0.0)):.1f}s" + """</strong> (CV: <strong>""" + f"{float(alert_ev.get('iat_cv', 0.0)):.2f}" + """</strong>)</div>
+                                <div><span style="color: #94A3B8;">Slow-Low Score:</span> <strong>""" + str(alert_ev.get("slow_exfiltration_score", "-")) + """</strong></div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     st.markdown("**Structured Evidence Dictionary:**")
                     st.json(selected_alert["evidence"])
         else:

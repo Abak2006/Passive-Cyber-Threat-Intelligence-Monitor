@@ -60,9 +60,33 @@ class AlertPipeline:
                 vertical_threshold=self.cfg.get("detectors.recon.vertical_scan_threshold", 8)
             ),
             ExfiltrationDetector(
-                ratio_threshold=self.cfg.get("detectors.exfiltration.outbound_inbound_byte_ratio", 6.0),
-                sustained_rate_threshold_bps=self.cfg.get("detectors.exfiltration.sustained_outbound_rate_bps", 1_500_000.0),
-                model_path=self.cfg.get("detectors.exfiltration.model_path", "models/exfil_detector.joblib")
+                ratio_threshold=self.cfg.get(
+                    "detectors.exfiltration.asymmetric_ratio_threshold",
+                    self.cfg.get("detectors.exfiltration.outbound_inbound_byte_ratio", 6.0)
+                ),
+                min_outbound_bytes=self.cfg.get(
+                    "detectors.exfiltration.minimum_outbound_bytes", 200_000
+                ),
+                sustained_rate_threshold_bps=self.cfg.get(
+                    "detectors.exfiltration.sustained_rate_threshold_bps",
+                    self.cfg.get("detectors.exfiltration.sustained_outbound_rate_bps", 1_000_000.0)
+                ),
+                burst_threshold_bytes=self.cfg.get(
+                    "detectors.exfiltration.burst_bytes_threshold",
+                    self.cfg.get("detectors.exfiltration.burst_threshold_bytes", 2_000_000)
+                ),
+                min_duration=self.cfg.get("detectors.exfiltration.minimum_duration", 0.5),
+                min_bytes_baseline=self.cfg.get("detectors.exfiltration.minimum_bytes_baseline", 1_000),
+                model_path=self.cfg.get("detectors.exfiltration.model_path", "models/exfil_detector.joblib"),
+                slow_exfil_enabled=self.cfg.get("detectors.exfiltration.slow_exfiltration.enabled", True),
+                slow_windows=self.cfg.get("detectors.exfiltration.slow_exfiltration.windows", [60.0, 300.0, 900.0, 3600.0]),
+                slow_min_transfers=self.cfg.get("detectors.exfiltration.slow_exfiltration.minimum_transfers", 4),
+                slow_min_cumulative_bytes=self.cfg.get("detectors.exfiltration.slow_exfiltration.minimum_cumulative_outbound_bytes", 35_000),
+                slow_max_cv=self.cfg.get("detectors.exfiltration.slow_exfiltration.maximum_expected_interval_cv", 0.50),
+                slow_persistence_threshold=self.cfg.get("detectors.exfiltration.slow_exfiltration.destination_persistence_threshold", 0.75),
+                slow_asymmetric_ratio_threshold=self.cfg.get("detectors.exfiltration.slow_exfiltration.asymmetric_ratio_threshold", 3.5),
+                slow_score_threshold=self.cfg.get("detectors.exfiltration.slow_exfiltration.score_threshold", 0.65),
+                slow_weights=self.cfg.get("detectors.exfiltration.slow_exfiltration.weights", None),
             ),
         ]
 

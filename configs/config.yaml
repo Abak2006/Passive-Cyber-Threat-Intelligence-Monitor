@@ -76,11 +76,37 @@ detectors:
   exfiltration:
     enabled: true
     model_path: "models/exfil_detector.joblib"
-    outbound_inbound_byte_ratio: 6.0
-    sustained_outbound_rate_bps: 2000000 # ~2 MB/s in single flow
-    burst_threshold_bytes: 4000000       # 4 MB threshold in test window
+    asymmetric_ratio_threshold: 6.0
+    outbound_inbound_byte_ratio: 6.0      # backward-compatible alias
+    minimum_outbound_bytes: 200000        # 200 KB minimum for asymmetric bulk detection
+    sustained_rate_threshold_bps: 1000000 # 1 MB/s sustained rate threshold
+    sustained_outbound_rate_bps: 1000000  # backward-compatible alias
+    burst_bytes_threshold: 2000000        # 2 MB burst threshold
+    burst_threshold_bytes: 2000000        # backward-compatible alias
+    minimum_bytes_baseline: 1000         # 1 KB baseline filter for registering flows in temporal tracker
     destination_novelty_score: 0.80
     rolling_window_sec: 30.0
+
+    # Stateful multi-window slow-and-low exfiltration detection settings
+    slow_exfiltration:
+      enabled: true
+      windows:
+        - 60
+        - 300
+        - 900
+        - 3600
+      minimum_transfers: 4                  # At least 4 transfers required in window
+      minimum_cumulative_outbound_bytes: 35000 # 35 KB cumulative outbound volume minimum
+      maximum_expected_interval_cv: 0.50   # CV < 0.50 indicates timing regularity
+      destination_persistence_threshold: 0.75 # >= 75% transfers going to same destination
+      asymmetric_ratio_threshold: 3.5      # cumulative outbound/inbound ratio >= 3.5
+      score_threshold: 0.65                # Composite score >= 0.65 triggers alert
+      weights:
+        volume: 0.25
+        asymmetry: 0.25
+        persistence: 0.20
+        timing: 0.15
+        frequency: 0.15
 
 fusion:
   correlation_window_sec: 25.0

@@ -8,15 +8,21 @@ To ensure the prototype can be evaluated immediately without downloading gigabyt
 python -m training.generate_synthetic
 ```
 
-The generated `data/sample/demo.pcap` contains:
-- Benign background traffic (HTTP, DNS, TLS 1.2/1.3)
-- Volumetric SYN Flood
-- Botnet C2 Beaconing (periodic heartbeats with low jitter)
-- DGA Domain Queries
-- DNS Tunnelling (high entropy long subdomains & TXT records)
-- Suspicious Encrypted Traffic (Cobalt Strike JA3 & SPLT anomalies)
-- Vertical and Horizontal Port Scanning
-- Data Exfiltration (asymmetric high-volume upload)
+The generated `data/sample/demo.pcap` contains 722 packets covering:
+- **Benign background traffic**: Standard HTTP, DNS, TLS 1.2/1.3 browsing
+- **Volumetric SYN Flood**: High packet arrival rate with ACK deficit
+- **Botnet C2 Beaconing**: Periodic heartbeats with low jitter (CV < 0.05)
+- **DGA Domain Queries**: High-entropy pseudo-random algorithmic domain lookups
+- **DNS Tunnelling**: High-entropy long subdomains & TXT records to `tunnel.exfil.org`
+- **Suspicious Encrypted Traffic**: Cobalt Strike JA3 & SPLT packet length profile
+- **Reconnaissance**: Vertical port scan and horizontal subnet sweeps
+- **Bulk Data Exfiltration**: `10.0.0.22` → `203.0.113.80:443` (~503 KB asymmetric transfer)
+- **Slow-and-Low Data Exfiltration**: `10.0.0.23` → `203.0.113.90:443` (staged ~9.6 KB chunks with interval jitter, persistent drop destination, and strong cumulative volume/asymmetry)
+- **Legitimate Periodic Traffic**: `10.0.0.45` → `198.51.100.20:443` (periodic balanced duplex transactions proving periodicity alone does NOT trigger exfiltration alerts)
+
+> [!NOTE]
+> **Synthetic Disclosures**: `data/sample/demo.pcap` is a synthetic laboratory evaluation artifact constructed via Scapy to provide repeatable, deterministically reproducible multi-threat scenarios without requiring gigabytes of packet downloads or exposing real credentials.
+
 
 ---
 

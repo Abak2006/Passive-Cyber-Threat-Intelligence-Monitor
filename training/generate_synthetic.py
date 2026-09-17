@@ -7,7 +7,7 @@ Uses Scapy for packet construction with zero active network transmission.
 from pathlib import Path
 import random
 import time
-from typing import List
+from typing import Any, List
 import numpy as np
 import pandas as pd
 from scapy.all import IP, TCP, UDP, DNS, DNSQR, Raw, wrpcap
@@ -154,7 +154,7 @@ def generate_training_csvs(output_dir: Path):
     print(f"[+] Generated training datasets under {output_dir}")
 
 
-def generate_demo_pcap(output_file: Path):
+def generate_demo_pcap(output_file: Path, exfiltration_bytes: int = 500_000):
     output_file.parent.mkdir(parents=True, exist_ok=True)
     packets: List = []
     t = 1700000000.0  # Base timestamp
@@ -292,25 +292,242 @@ def generate_demo_pcap(output_file: Path):
         packets.append(h_pkt)
 
     # 8. DATA EXFILTRATION (t: 30s - 34s)
-    # Massive outbound transfer from internal host to drop server (outbound >> inbound)
+    # Realistic sustained outbound transfer from internal host to drop server (outbound >> inbound)
     exfil_src = "10.0.0.22"
     exfil_dst = "203.0.113.80"
-    for chunk in range(25):
-        t += 0.02
-        bulk_data = b"CONFIDENTIAL_INTEL_PAYLOAD_CHUNK_" + (b"X" * 1350)
-        exf_pkt = IP(src=exfil_src, dst=exfil_dst) / TCP(sport=44890, dport=443, flags="PA", seq=10000 + chunk * 1400, ack=50) / Raw(load=bulk_data)
+    exfil_sport = 44890
+    exfil_dport = 443
+
+    # 3-Way Handshake
+    t += 0.5
+    syn_pkt = IP(src=exfil_src, dst=exfil_dst) / TCP(sport=exfil_sport, dport=exfil_dport, flags="S", seq=1000)
+    syn_pkt.time = t
+    packets.append(syn_pkt)
+
+    t += 0.015
+    synack_pkt = IP(src=exfil_dst, dst=exfil_src) / TCP(sport=exfil_dport, dport=exfil_sport, flags="SA", seq=5000, ack=1001)
+    synack_pkt.time = t
+    packets.append(synack_pkt)
+
+    t += 0.01
+    ack_pkt = IP(src=exfil_src, dst=exfil_dst) / TCP(sport=exfil_sport, dport=exfil_dport, flags="A", seq=1001, ack=5001)
+    ack_pkt.time = t
+    packets.append(ack_pkt)
+
+    # Sustained data transmission: MTU-sized chunks (~1380 payload bytes each)
+    payload_chunk_size = 1380
+    num_chunks = int(np.ceil(exfiltration_bytes / payload_chunk_size))
+    total_transfer_duration = 3.0  # ~3 seconds duration
+    dt = total_transfer_duration / num_chunks
+
+    current_seq = 1001
+    current_ack = 5001
+
+    for chunk in range(num_chunks):
+        # Vary inter-packet arrival time slightly to model realistic network jitter
+        t += dt + random.uniform(-0.001, 0.001)
+        prefix = f"EXFIL_INTEL_CHUNK_{chunk:04d}_".encode("ascii")
+        padding_len = max(0, payload_chunk_size - len(prefix))
+        bulk_data = prefix + (b"X" * padding_len)
+
+        exf_pkt = IP(src=exfil_src, dst=exfil_dst) / TCP(
+            sport=exfil_sport, dport=exfil_dport, flags="PA", seq=current_seq, ack=current_ack
+        ) / Raw(load=bulk_data)
         exf_pkt.time = t
         packets.append(exf_pkt)
+        current_seq += len(bulk_data)
 
-    # Single inbound ACK to simulate extreme asymmetry (outbound:inbound byte ratio > 50:1)
-    t += 0.05
-    inbound_ack = IP(src=exfil_dst, dst=exfil_src) / TCP(sport=443, dport=44890, flags="A", seq=50, ack=10000 + 25 * 1400)
-    inbound_ack.time = t
-    packets.append(inbound_ack)
+        # Periodic TCP ACK from receiver every 40 packets (acknowledges data without large inbound payload)
+        if chunk > 0 and chunk % 40 == 0:
+            t_ack = t + 0.001
+            inbound_ack = IP(src=exfil_dst, dst=exfil_src) / TCP(
+                sport=exfil_dport, dport=exfil_sport, flags="A", seq=current_ack, ack=current_seq
+            )
+            inbound_ack.time = t_ack
+            packets.append(inbound_ack)
+
+    # Final ACK from receiver
+    t += 0.015
+    final_inbound_ack = IP(src=exfil_dst, dst=exfil_src) / TCP(
+        sport=exfil_dport, dport=exfil_sport, flags="A", seq=current_ack, ack=current_seq
+    )
+    final_inbound_ack.time = t
+    packets.append(final_inbound_ack)
+
+    # Clean TCP Teardown
+    t += 0.01
+    fin_pkt = IP(src=exfil_src, dst=exfil_dst) / TCP(
+        sport=exfil_sport, dport=exfil_dport, flags="FA", seq=current_seq, ack=current_ack
+    )
+    fin_pkt.time = t
+    packets.append(fin_pkt)
+
+    t += 0.01
+    finack_pkt = IP(src=exfil_dst, dst=exfil_src) / TCP(
+        sport=exfil_dport, dport=exfil_sport, flags="FA", seq=current_ack, ack=current_seq + 1
+    )
+    finack_pkt.time = t
+    # 9. SLOW-AND-LOW DATA EXFILTRATION (10.0.0.23 -> 203.0.113.90:443)
+    # Staged small transfers with interval jitter, persistent destination, and high cumulative asymmetry
+    t = generate_slow_low_exfiltration(packets, t)
+
+    # 10. LEGITIMATE PERIODIC BENIGN TRAFFIC (10.0.0.45 -> 198.51.100.20:443)
+    # Balanced periodic duplex traffic (ratio ~1.0) to verify periodicity alone does not trigger exfiltration
+    t = generate_legitimate_periodic_traffic(packets, t)
+
+    # Sort packets strictly by timestamp
+    packets.sort(key=lambda p: float(p.time))
 
     # Write PCAP file
     wrpcap(str(output_file), packets)
     print(f"[+] Wrote {len(packets)} packets to sample PCAP: {output_file}")
+
+
+def generate_slow_low_exfiltration(
+    packets: List[Any],
+    start_time: float,
+    src_ip: str = "10.0.0.23",
+    dst_ip: str = "203.0.113.90",
+    dst_port: int = 443,
+    num_transfers: int = 6,
+    base_interval: float = 14.0,
+    jitter: float = 1.5,
+    payload_size: int = 9600,
+) -> float:
+    """
+    Generates realistic Slow-and-Low Data Exfiltration:
+    Small outbound chunks (e.g. ~9.6 KB) staged at approximately regular intervals with jitter,
+    each using a dedicated TCP connection (handshake, data, teardown) to a persistent drop server.
+    """
+    t = start_time
+    for transfer_idx in range(num_transfers):
+        if transfer_idx > 0:
+            interval = base_interval + random.uniform(-jitter, jitter)
+            t += interval
+        else:
+            t += 1.0
+
+        sport = 52000 + transfer_idx
+        # 3-way handshake
+        syn = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="S", seq=1000)
+        syn.time = t
+        packets.append(syn)
+
+        t += 0.015
+        synack = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="SA", seq=5000, ack=1001)
+        synack.time = t
+        packets.append(synack)
+
+        t += 0.01
+        ack = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="A", seq=1001, ack=5001)
+        ack.time = t
+        packets.append(ack)
+
+        # Transmit ~9.6 KB in 7 packets (~1370 bytes each)
+        chunk_size = 1370
+        chunks = int(np.ceil(payload_size / chunk_size))
+        curr_seq = 1001
+        curr_ack = 5001
+
+        for c in range(chunks):
+            t += 0.01 + random.uniform(-0.001, 0.001)
+            prefix = f"SLOW_EXFIL_STAGE_{transfer_idx:02d}_CHUNK_{c:02d}_".encode("ascii")
+            data = prefix + b"Y" * max(0, chunk_size - len(prefix))
+            pkt = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="PA", seq=curr_seq, ack=curr_ack) / Raw(load=data)
+            pkt.time = t
+            packets.append(pkt)
+            curr_seq += len(data)
+
+        # Small inbound ACK acknowledging data
+        t += 0.015
+        in_ack = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="A", seq=curr_ack, ack=curr_seq)
+        in_ack.time = t
+        packets.append(in_ack)
+
+        # Clean TCP FIN teardown
+        t += 0.01
+        fin = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="FA", seq=curr_seq, ack=curr_ack)
+        fin.time = t
+        packets.append(fin)
+
+        t += 0.01
+        finack = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="FA", seq=curr_ack, ack=curr_seq + 1)
+        finack.time = t
+        packets.append(finack)
+
+    return t
+
+
+def generate_legitimate_periodic_traffic(
+    packets: List[Any],
+    start_time: float,
+    src_ip: str = "10.0.0.45",
+    dst_ip: str = "198.51.100.20",
+    dst_port: int = 443,
+    num_transfers: int = 5,
+    base_interval: float = 12.0,
+) -> float:
+    """
+    Generates benign periodic uploads/polling (e.g. telemetry or health check API).
+    Produces balanced bidirectional traffic (~5.6 KB forward, ~5.6 KB backward) with low IAT CV.
+    Guarantees that periodicity ALONE does not cause false positives.
+    """
+    t = start_time
+    for transfer_idx in range(num_transfers):
+        if transfer_idx > 0:
+            t += base_interval + random.uniform(-0.5, 0.5)
+        else:
+            t += 0.5
+
+        sport = 53000 + transfer_idx
+        # Handshake
+        syn = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="S", seq=2000)
+        syn.time = t
+        packets.append(syn)
+
+        t += 0.015
+        synack = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="SA", seq=6000, ack=2001)
+        synack.time = t
+        packets.append(synack)
+
+        t += 0.01
+        ack = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="A", seq=2001, ack=6001)
+        ack.time = t
+        packets.append(ack)
+
+        # 4 forward packets (~1400 bytes each) = ~5.6 KB outbound
+        curr_seq = 2001
+        curr_ack = 6001
+        for c in range(4):
+            t += 0.01
+            req_data = f"BENIGN_API_TELEMETRY_SAMPLE_{c:02d}_".encode("ascii") + (b"B" * 1350)
+            req_pkt = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="PA", seq=curr_seq, ack=curr_ack) / Raw(load=req_data)
+            req_pkt.time = t
+            packets.append(req_pkt)
+            curr_seq += len(req_data)
+
+        # 4 backward response packets (~1400 bytes each) = ~5.6 KB inbound (Balanced Duplex)
+        for c in range(4):
+            t += 0.01
+            resp_data = f"BENIGN_API_RESPONSE_PAYLOAD_{c:02d}_".encode("ascii") + (b"R" * 1350)
+            resp_pkt = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="PA", seq=curr_ack, ack=curr_seq) / Raw(load=resp_data)
+            resp_pkt.time = t
+            packets.append(resp_pkt)
+            curr_ack += len(resp_data)
+
+        # Teardown
+        t += 0.01
+        fin = IP(src=src_ip, dst=dst_ip) / TCP(sport=sport, dport=dst_port, flags="FA", seq=curr_seq, ack=curr_ack)
+        fin.time = t
+        packets.append(fin)
+
+        t += 0.01
+        finack = IP(src=dst_ip, dst=src_ip) / TCP(sport=dst_port, dport=sport, flags="FA", seq=curr_ack, ack=curr_seq + 1)
+        finack.time = t
+        packets.append(finack)
+
+    return t
+
 
 
 def main():

@@ -76,22 +76,22 @@ Evaluated via `python -m training.evaluate` using Stratified K-Fold holdout test
 Measured via `python -m app.benchmark --sweep --pcap data/sample/demo.pcap` on host:
 - **Host Platform**: Windows 10 (AMD64)
 - **Python Runtime**: CPython 3.9.13 (16 logical CPU cores)
-- **Dataset Evaluated**: `data/sample/demo.pcap` (178 flows, 224 packets)
+- **Dataset Evaluated**: `data/sample/demo.pcap` (179 flows, 574 packets, including 500 KB exfiltration scenario)
 
 ### Rate Sweep & Latency Percentiles
 
 | Mode / Rate | Packet Ingestion Rate | Flow Processing Rate | P50 Latency | P95 Latency | P99 Latency | Max Latency | Peak Memory (RSS) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1.0x Real-time** | 11.7 pkts/sec | 11.2 flows/sec | 2.88 ms | 6.73 ms | 18.23 ms | 28.14 ms | 194.8 MB |
-| **2.0x Real-time** | 21.1 pkts/sec | 20.6 flows/sec | 2.62 ms | 3.52 ms | 12.01 ms | 18.91 ms | 195.4 MB |
-| **5.0x Real-time** | 44.8 pkts/sec | 44.4 flows/sec | 3.12 ms | 6.18 ms | 10.45 ms | 12.87 ms | 195.5 MB |
-| **10.0x Real-time** | 52.1 pkts/sec | 51.7 flows/sec | 3.27 ms | 9.01 ms | 13.41 ms | 15.62 ms | 195.5 MB |
-| **Max (Unthrottled)**| **239.9 pkts/sec** | **190.4 flows/sec** | **3.94 ms** | **9.79 ms** | **14.82 ms** | **19.26 ms** | **196.0 MB** |
+| **1.0x Real-time** | 16.8 pkts/sec | 15.0 flows/sec | 6.01 ms | 14.84 ms | 25.75 ms | 28.99 ms | 194.5 MB |
+| **2.0x Real-time** | 16.8 pkts/sec | 14.9 flows/sec | 5.61 ms | 14.52 ms | 25.27 ms | 33.31 ms | 195.0 MB |
+| **5.0x Real-time** | 39.9 pkts/sec | 17.5 flows/sec | 5.28 ms | 24.69 ms | 31.40 ms | 33.64 ms | 195.2 MB |
+| **10.0x Real-time** | 49.9 pkts/sec | 17.5 flows/sec | 5.64 ms | 21.33 ms | 33.09 ms | 34.72 ms | 195.4 MB |
+| **Max (Unthrottled)**| **412.6 pkts/sec** | **132.5 flows/sec** | **5.51 ms** | **12.04 ms** | **19.46 ms** | **67.60 ms** | **197.2 MB** |
 
 ### Benchmark Key Findings:
-- **Consistent Sub-5ms Median Latency**: Across all pacing rates from 1.0x to unthrottled maximum, the median per-flow processing latency ($P_{50}$) remains between **2.62 ms and 3.94 ms**, well within real-time streaming constraints.
-- **Bounded Tail Latency**: $P_{95}$ latency remains under **9.8 ms**, and $P_{99}$ latency remains under **18.3 ms**.
-- **Stable Memory Profile**: Process RSS memory consumption remains virtually constant at **~195 MB** across sweeps, verifying that generator-based packet streaming and rolling window pruning prevent memory leaks.
+- **Consistent 5-6ms Median Latency**: Across all pacing rates from 1.0x to unthrottled maximum, median per-flow processing latency ($P_{50}$) remains tightly clustered between **5.28 ms and 6.01 ms** on 574 packets and 179 flows.
+- **Controlled Tail Latency**: $P_{95}$ latency on unthrottled stream reaches **12.04 ms**, and $P_{99}$ latency reaches **19.46 ms**.
+- **Stable Memory Footprint**: Peak RSS memory consumption remains bounded at **~195–197 MB** across all pacing rates, demonstrating that sliding-window state pruning and generator-based packet consumption effectively prevent memory bloat.
 
 ---
 

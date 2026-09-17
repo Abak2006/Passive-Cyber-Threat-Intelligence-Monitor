@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests Passing](https://img.shields.io/badge/tests-36%2F36%20passing-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/tests-50%2F50%20passing-brightgreen.svg)]()
 [![Enclave Security](https://img.shields.io/badge/mode-unidirectional%20passive-success.svg)]()
 
 > **AEGIS: AI-Powered Passive Cyber Threat Intelligence Platform**  
@@ -265,11 +265,11 @@ python -m app.benchmark --sweep --duration 3
 ==============================================================================
 Rate       | Pkts/s       | Flows/s      | P50 (ms)   | P95 (ms)   | RSS (MB)  
 ------------------------------------------------------------------------------
-1.0x       | 11.7         | 11.2         | 2.877      | 6.731      | 194.8     
-2.0x       | 21.1         | 20.6         | 2.617      | 3.516      | 195.4     
-5.0x       | 44.8         | 44.4         | 3.117      | 6.181      | 195.5     
-10.0x      | 52.1         | 51.7         | 3.265      | 9.005      | 195.5     
-max (raw)  | 239.9        | 190.4        | 3.937      | 9.790      | 196.0     
+1.0x       | 13.7         | 12.8         | 25.081     | 42.737     | 194.7     
+2.0x       | 16.1         | 14.4         | 11.041     | 20.655     | 196.6     
+5.0x       | 24.9         | 17.1         | 19.733     | 40.059     | 198.4     
+10.0x      | 43.1         | 17.1         | 11.705     | 27.484     | 199.8     
+max (raw)  | 88.1         | 35.9         | 22.033     | 54.419     | 201.7     
 ==============================================================================
 ```
 *Full technical details and methodology available in [docs/upgrade_report.md](docs/upgrade_report.md).*
