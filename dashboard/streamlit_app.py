@@ -659,9 +659,10 @@ with tab_benchmark:
         </div>
         """, unsafe_allow_html=True)
 
-        # Rate sweep charts
+        df_runs = pd.DataFrame(runs)
+
+        # Rate sweep charts (when multiple speed tiers are available)
         if len(runs) > 1:
-            df_runs = pd.DataFrame(runs)
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 fig_pps = px.bar(
@@ -695,23 +696,22 @@ with tab_benchmark:
                 )
                 st.plotly_chart(fig_lat, use_container_width=True)
 
-            display_cols = ["speed_setting", "packets_per_sec", "flows_per_sec", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms", "latency_max_ms", "peak_memory_mb", "cpu_percent"]
-            df_disp = df_runs[display_cols].rename(columns={
-                "speed_setting": "Replay Rate",
-                "packets_per_sec": "Packets/s",
-                "flows_per_sec": "Flows/s",
-                "latency_p50_ms": "P50 (ms)",
-                "latency_p95_ms": "P95 (ms)",
-                "latency_p99_ms": "P99 (ms)",
-                "latency_max_ms": "Max (ms)",
-                "peak_memory_mb": "Peak RSS (MB)",
-                "cpu_percent": "CPU (%)",
-            })
+        display_cols = [c for c in ["speed_setting", "packets_per_sec", "flows_per_sec", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms", "latency_max_ms", "peak_memory_mb", "cpu_percent"] if c in df_runs.columns]
+        df_disp = df_runs[display_cols].rename(columns={
+            "speed_setting": "Replay Rate",
+            "packets_per_sec": "Packets/s",
+            "flows_per_sec": "Flows/s",
+            "latency_p50_ms": "P50 (ms)",
+            "latency_p95_ms": "P95 (ms)",
+            "latency_p99_ms": "P99 (ms)",
+            "latency_max_ms": "Max (ms)",
+            "peak_memory_mb": "Peak RSS (MB)",
+            "cpu_percent": "CPU (%)",
+        })
         st.dataframe(df_disp, use_container_width=True, hide_index=True)
     else:
         st.info("No saved benchmark results found. Run a benchmark below to populate host metrics.")
 
-<<<<<<< Updated upstream
     # ==============================================================================
     # BEACON ADVERSARIAL ROBUSTNESS & RED-TEAM VALIDATION PANEL (AEGIS v2.2)
     # ==============================================================================
