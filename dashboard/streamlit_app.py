@@ -915,9 +915,102 @@ with tab_benchmark:
                 "peak_memory_mb": "Peak RSS (MB)",
                 "cpu_percent": "CPU (%)",
             })
-            st.dataframe(df_disp, use_container_width=True, hide_index=True)
+        st.dataframe(df_disp, use_container_width=True, hide_index=True)
     else:
         st.info("No saved benchmark results found. Run a live benchmark below to populate empirical host metrics.")
+
+    # ==============================================================================
+    # BEACON ADVERSARIAL ROBUSTNESS & RED-TEAM VALIDATION PANEL (AEGIS v2.2)
+    # ==============================================================================
+    st.markdown("---")
+    st.markdown('<div class="soc-section-title">AEGIS v2.2 — Red-Team Validation & Empirical Boundary Telemetry</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-section-sub">Comprehensive 38-scenario evaluation of label isolation, benign hard negatives, adversarial timing escalation, cross-seed statistics, and threshold tradeoffs</div>', unsafe_allow_html=True)
+
+    adv_beacon_file = Path("data/adversarial_beacon_results.json")
+    if adv_beacon_file.exists():
+        try:
+            with open(adv_beacon_file, "r") as f:
+                adv_results = json.load(f)
+
+            scens = adv_results.get("scenarios", {})
+            cm = adv_results.get("confusion_matrix", {})
+            grp = adv_results.get("grouped_summary", {})
+            cs = adv_results.get("cross_seed_summary", {})
+            th_sweep = adv_results.get("threshold_sensitivity", [])
+
+            # High-Level Metrics Strip
+            col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
+            col_m1.metric("Overall Recall", f"{cm.get('recall', 0.0) * 100:.1f}%", "Sensitivity")
+            col_m2.metric("Precision", f"{cm.get('precision', 0.0) * 100:.1f}%", "Positive Pred")
+            col_m3.metric("F1-Score", f"{cm.get('f1_score', 0.0):.4f}", "Harmonic Mean")
+            col_m4.metric("False Positive Rate", f"{cm.get('fpr', 0.0) * 100:.1f}%", "Hard Negatives Included")
+            col_m5.metric("ROC-AUC", f"{cm.get('roc_auc', 0.0):.4f}", "Continuous Curve")
+            col_m6.metric("PR-AUC", f"{cm.get('pr_auc', 0.0):.4f}", "Avg Precision")
+
+            # Cross Seed Statistics Callout (if available)
+            if cs:
+                st.markdown(f"""
+                <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 10px 16px; margin: 12px 0; font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div><span style="color: #64748B;">Cross-Seed Validation:</span> <strong style="color: #E2E8F0;">Seeds {cs.get('seeds_evaluated', [])}</strong></div>
+                    <div><span style="color: #64748B;">Mean Recall:</span> <strong style="color: #38BDF8;">{cs.get('recall_mean', 0.0)*100:.1f}% &plusmn; {cs.get('recall_std', 0.0)*100:.2f}%</strong></div>
+                    <div><span style="color: #64748B;">Mean Precision:</span> <strong style="color: #10B981;">{cs.get('precision_mean', 0.0)*100:.1f}% &plusmn; {cs.get('precision_std', 0.0)*100:.2f}%</strong></div>
+                    <div><span style="color: #64748B;">Mean FPR:</span> <strong style="color: #F87171;">{cs.get('fpr_mean', 0.0)*100:.1f}% &plusmn; {cs.get('fpr_std', 0.0)*100:.2f}%</strong></div>
+                    <div><span style="color: #64748B;">Mean ROC-AUC:</span> <strong style="color: #FBBF24;">{cs.get('roc_auc_mean', 0.0):.4f} &plusmn; {cs.get('roc_auc_std', 0.0):.4f}</strong></div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Grouped Architectural Breakdown Cards
+            if grp:
+                st.markdown("##### Grouped Architectural Subset Performance")
+                col_g1, col_g2, col_g3, col_g4, col_g5 = st.columns(5)
+                col_g1.metric("Pure Timing Baseline", f"{grp.get('pure_timing_mean_recall', 0.0) * 100:.1f}%", "Scenarios A-F")
+                col_g2.metric("Low & Slow Fused", f"{grp.get('low_and_slow_fused_mean_recall', 0.0) * 100:.1f}%", "Scenarios L-P")
+                col_g3.metric("Jitter + Multi-Signal", f"{grp.get('random_jitter_plus_independent_signals_mean_recall', 0.0) * 100:.1f}%", "Scenarios Q-T")
+                col_g4.metric("Benign Hard Neg FPR", f"{grp.get('benign_hard_negatives_mean_fpr', 0.0) * 100:.1f}%", "Scenarios U-AD")
+                col_g5.metric("Adversarial Escalation", f"{grp.get('adversarial_escalation_mean_recall', 0.0) * 100:.1f}%", "Scenarios AE-AL")
+
+            # 38-Scenario Matrix Table
+            if scens:
+                st.markdown("##### All 38 Evaluated Scenarios (A - AL)")
+                adv_rows = []
+                for k, v in scens.items():
+                    stype = "ATTACK" if v["is_attack"] else "BENIGN"
+                    adv_rows.append({
+                        "Scenario": v["label"],
+                        "Type": stype,
+                        "Outcome State": v.get("outcome_state", "Evaluated"),
+                        "Timing Recall": f"{v['timing_detection_rate'] * 100:.1f}%",
+                        "Fused Recall": f"{v['fused_detection_rate'] * 100:.1f}%",
+                        "P50 Conf": f"{v.get('fused_median_confidence', 0.0):.4f}",
+                        "P95 Conf": f"{v.get('fused_p95_confidence', 0.0):.4f}",
+                        "Timing Qual": f"{v.get('timing_evidence_quality', 0.0):.2f}",
+                        "Protocol Score": f"{v.get('protocol_evidence_score', 0.0):.2f}",
+                        "Behavior Score": f"{v.get('behavior_evidence_score', 0.0):.2f}",
+                    })
+
+                df_adv = pd.DataFrame(adv_rows)
+                st.dataframe(df_adv, use_container_width=True, hide_index=True)
+
+            # Threshold Sensitivity Table
+            if th_sweep:
+                st.markdown("##### Classification Decision Threshold Tradeoff Sweep")
+                df_th = pd.DataFrame(th_sweep)
+                df_th_disp = df_th[["threshold", "precision", "recall", "f1_score", "fpr", "tp", "fp"]].rename(columns={
+                    "threshold": "Decision Threshold",
+                    "precision": "Precision",
+                    "recall": "Recall",
+                    "f1_score": "F1-Score",
+                    "fpr": "FPR",
+                    "tp": "TP Count",
+                    "fp": "FP Count",
+                })
+                st.dataframe(df_th_disp, use_container_width=True, hide_index=True)
+
+            st.info("ℹ️ **Scientific Integrity & Boundary Mapping:** AEGIS reports empirical detection limits under extreme randomized timing (&ge;60% jitter) and benign hard negatives. Periodic benign heartbeats (e.g. NTP, database keepalives) naturally share timing features with periodic C2 and are honestly captured in the FPR telemetry. Confidence scores represent bounded evidence vectors, not uncalibrated probabilities.")
+        except Exception as e:
+            st.warning(f"Could not load adversarial beacon benchmark results: {e}")
+    else:
+        st.info("Run `python -m training.adversarial_beacon_benchmark` to populate adversarial beacon robustness telemetry.")
 
     st.markdown("---")
     st.markdown("#### Execute Live Host Benchmark")

@@ -36,7 +36,51 @@ class PacketEvent:
     payload_bytes: bytes = field(default=b"", repr=False)
     dns_query: Optional[str] = None
     dns_type: Optional[int] = None
-    source_type: str = "pcap_replay"
+    input_source: str = "pcap_replay"
+
+    def __init__(
+        self,
+        timestamp: float,
+        length: int,
+        src_ip: str,
+        src_port: int,
+        dst_ip: str,
+        dst_port: int,
+        protocol: str,
+        is_syn: bool = False,
+        is_ack: bool = False,
+        is_fin: bool = False,
+        is_rst: bool = False,
+        payload_bytes: bytes = b"",
+        dns_query: Optional[str] = None,
+        dns_type: Optional[int] = None,
+        input_source: Optional[str] = None,
+        source_type: Optional[str] = None,
+    ):
+        self.timestamp = timestamp
+        self.length = length
+        self.src_ip = src_ip
+        self.src_port = src_port
+        self.dst_ip = dst_ip
+        self.dst_port = dst_port
+        self.protocol = protocol
+        self.is_syn = is_syn
+        self.is_ack = is_ack
+        self.is_fin = is_fin
+        self.is_rst = is_rst
+        self.payload_bytes = payload_bytes
+        self.dns_query = dns_query
+        self.dns_type = dns_type
+        self.input_source = input_source or source_type or "pcap_replay"
+
+    @property
+    def source_type(self) -> str:
+        """Backward compatibility alias for input_source."""
+        return self.input_source
+
+    @source_type.setter
+    def source_type(self, value: str) -> None:
+        self.input_source = value
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary matching flow stream manager expectation."""
@@ -55,7 +99,8 @@ class PacketEvent:
             "payload_bytes": self.payload_bytes,
             "dns_query": self.dns_query,
             "dns_type": self.dns_type,
-            "source_type": self.source_type,
+            "input_source": self.input_source,
+            "source_type": self.input_source,
         }
 
 
@@ -65,8 +110,17 @@ class PassiveInputSource(ABC):
     Enforces strictly read-only, receive-only streaming ingestion.
     """
 
-    def __init__(self, source_type: str):
-        self.source_type = source_type
+    def __init__(self, input_source: Optional[str] = None, source_type: Optional[str] = None):
+        self.input_source = input_source or source_type or "pcap_replay"
+
+    @property
+    def source_type(self) -> str:
+        """Backward compatibility alias for input_source."""
+        return self.input_source
+
+    @source_type.setter
+    def source_type(self, value: str) -> None:
+        self.input_source = value
 
     @abstractmethod
     def stream_events(self) -> Generator[PacketEvent, None, None]:
@@ -81,7 +135,7 @@ class PcapReplaySource(PassiveInputSource):
     """
 
     def __init__(self, pcap_path: str, speed: float = 1.0, realtime: bool = False):
-        super().__init__(source_type="pcap_replay")
+        super().__init__(input_source="pcap_replay")
         self.pcap_path = Path(pcap_path)
         if not self.pcap_path.exists():
             raise FileNotFoundError(f"PCAP file not found: {pcap_path}")
@@ -120,7 +174,7 @@ class PcapReplaySource(PassiveInputSource):
                 payload_bytes=pkt_dict.get("payload_bytes", b""),
                 dns_query=pkt_dict.get("dns_query"),
                 dns_type=pkt_dict.get("dns_type"),
-                source_type=self.source_type,
+                input_source=self.input_source,
             )
 
 
@@ -131,7 +185,7 @@ class SyntheticStreamSource(PassiveInputSource):
     """
 
     def __init__(self, count: int = 100, interval_sec: float = 0.01):
-        super().__init__(source_type="synthetic_stream")
+        super().__init__(input_source="synthetic_stream")
         self.count = count
         self.interval_sec = interval_sec
 
@@ -152,7 +206,7 @@ class SyntheticStreamSource(PassiveInputSource):
                     protocol="TCP",
                     is_syn=False,
                     is_ack=True,
-                    source_type=self.source_type,
+                    input_source=self.input_source,
                 )
             else:
                 # Normal web traffic
@@ -166,7 +220,7 @@ class SyntheticStreamSource(PassiveInputSource):
                     protocol="TCP",
                     is_syn=(i % 5 == 0),
                     is_ack=True,
-                    source_type=self.source_type,
+                    input_source=self.input_source,
                 )
             if self.interval_sec > 0:
                 time.sleep(self.interval_sec)
@@ -189,8 +243,9 @@ class DataDiodeFeedSource(PassiveInputSource):
         listen_address: Optional[str] = None,
         listen_port: Optional[int] = None
     ):
-        super().__init__(source_type="data_diode_feed")
-        self._buffer: List[PacketEvent] = queue_buffer or []
+        super().__init__(input_source="data_diode")
+        # Correctly preserve caller's buffer reference when an empty list is passed
+        self._buffer: List[PacketEvent] = queue_buffer if queue_buffer is not None else []
         self.listen_address = listen_address
         self.listen_port = listen_port
 
@@ -208,7 +263,7 @@ class DataDiodeFeedSource(PassiveInputSource):
 
     def ingest_diode_frame(self, frame: PacketEvent) -> None:
         """Internal enqueue hook from the physical NIC receive ring buffer."""
-        frame.source_type = self.source_type
+        frame.input_source = self.input_source
         self._buffer.append(frame)
 
 
@@ -216,7 +271,7 @@ class NetFlowSource(PassiveInputSource):
     """Receive-only collector interface for passive NetFlow v5/v9 datagrams."""
 
     def __init__(self):
-        super().__init__(source_type="netflow")
+        super().__init__(input_source="netflow")
 
     def stream_events(self) -> Generator[PacketEvent, None, None]:
         # Receive-only collector stub ready for enterprise telemetry ingestion
@@ -228,7 +283,7 @@ class IPFIXSource(PassiveInputSource):
     """Receive-only collector interface for passive IPFIX export streams."""
 
     def __init__(self):
-        super().__init__(source_type="ipfix")
+        super().__init__(input_source="ipfix")
 
     def stream_events(self) -> Generator[PacketEvent, None, None]:
         return
@@ -239,7 +294,7 @@ class SFlowSource(PassiveInputSource):
     """Receive-only collector interface for passive sFlow packet-sampling datagrams."""
 
     def __init__(self):
-        super().__init__(source_type="sflow")
+        super().__init__(input_source="sflow")
 
     def stream_events(self) -> Generator[PacketEvent, None, None]:
         return

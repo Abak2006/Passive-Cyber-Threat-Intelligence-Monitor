@@ -35,7 +35,7 @@ class FlowState:
         self.init_dst_ip = packet["dst_ip"]
         self.init_dst_port = packet["dst_port"]
         self.protocol = packet["protocol"]
-        self.source_type = packet.get("source_type", "pcap_replay")
+        self.input_source = packet.get("input_source") or packet.get("source_type", "pcap_replay")
 
         self.start_time = packet["timestamp"]
         self.last_time = packet["timestamp"]
@@ -60,6 +60,15 @@ class FlowState:
         self.quic_metadata: Optional[Dict[str, Any]] = None
 
         self.add_packet(packet)
+
+    @property
+    def source_type(self) -> str:
+        """Backward compatibility alias for input_source."""
+        return self.input_source
+
+    @source_type.setter
+    def source_type(self, value: str) -> None:
+        self.input_source = value
 
     def add_packet(self, packet: Dict[str, Any]):
         ts = packet["timestamp"]
@@ -91,14 +100,16 @@ class FlowState:
                 _, type_name = normalize_dns_type(packet["dns_type"])
                 self.dns_types.append(type_name)
 
-        # Passive TLS parsing on initial handshake (TCP)
+        # PAYLOAD MINIMIZATION & PASSIVE ZERO-DECRYPTION GUARANTEE:
+        # Payload bytes may be transiently inspected for protocol metadata extraction
+        # (e.g. unencrypted TLS Client Hello / QUIC Long Headers) but are not decrypted,
+        # persisted, or exposed to downstream threat detectors.
         payload = packet.get("payload_bytes")
         if not self.tls_metadata and self.protocol == "TCP" and payload:
             tls_meta = TLSFeatureExtractor.parse_client_hello(payload)
             if tls_meta:
                 self.tls_metadata = tls_meta
 
-        # Passive QUIC parsing on initial handshake (UDP 443 / 8443)
         if not self.quic_metadata and self.protocol == "UDP" and payload:
             if self.init_dst_port in (443, 8443, 4433) or self.init_src_port in (443, 8443, 4433):
                 quic_meta = QUICFeatureExtractor.parse_quic_packet_header(payload)
@@ -117,7 +128,8 @@ class FlowState:
             "dst_ip": self.init_dst_ip,
             "dst_port": self.init_dst_port,
             "protocol": self.protocol,
-            "source_type": self.source_type,
+            "input_source": self.input_source,
+            "source_type": self.input_source,
             "start_time": self.start_time,
             "end_time": self.last_time,
             "duration": self.duration,
@@ -156,7 +168,7 @@ class FlowState:
             backward_packets=self.backward_packets,
             forward_bytes=self.forward_bytes,
             backward_bytes=self.backward_bytes,
-            input_source=self.source_type,
+            input_source=self.input_source,
         )
 
 

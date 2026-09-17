@@ -78,6 +78,8 @@ class FlowFeatureExtractor:
             "syn_ack_ratio": round(syn_ack_ratio, 4),
             "is_short_flow": duration < 0.5 and total_pkts <= 3,
             "is_syn_only": syn_count > 0 and ack_count == 0,
+            "input_source": flow_dict.get("input_source") or flow_dict.get("source_type", "pcap_replay"),
+            "source_type": flow_dict.get("input_source") or flow_dict.get("source_type", "pcap_replay"),
         }
 
         return features

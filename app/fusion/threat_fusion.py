@@ -1,7 +1,8 @@
 """
-Threat Fusion Engine.
+Threat Fusion Engine (AEGIS v2.1).
 Correlates outputs from individual detectors, synthesizes composite threat assessments,
 handles unknown anomaly classifications, and generates structured, explainable StandardAlerts.
+Distinguishes SAME-SIGNAL evidence from INDEPENDENT PROTOCOL / BEHAVIORAL signals.
 """
 
 from collections import defaultdict
@@ -16,6 +17,7 @@ class ThreatFusionEngine:
     """
     Synthesizes and correlates multi-detector outputs into unified, explainable threat alerts.
     Distinguishes Malicious Evidence, Benign Evidence, and Insufficient Evidence.
+    Combines Timing Group, Behavior Group, and Protocol Group evidence without double-counting.
     Deduplicates repetitive alerts on identical endpoints within a sliding time window.
     """
 
@@ -46,12 +48,14 @@ class ThreatFusionEngine:
 
         now_ts = flow_features.get("end_time") or time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
-        input_source = flow_features.get("input_source") or flow_features.get("source_type") or "pcap_replay"
+        input_source = flow_features.get("input_source") or flow_features.get("source_type", "pcap_replay")
 
         det_map = {d.detector: d for d in detections}
         final_alerts: List[StandardAlert] = []
 
-        # Multi-detector Composite Rule 1: Encrypted Traffic + Data Exfiltration
+        # -------------------------------------------------------------
+        # COMPOSITE RULE 1: Encrypted Traffic + Data Exfiltration
+        # -------------------------------------------------------------
         if (
             "encrypted_traffic_detector" in det_map and
             "exfiltration_detector" in det_map
@@ -91,7 +95,9 @@ class ThreatFusionEngine:
                 final_alerts.append(alert)
             return final_alerts
 
-        # Multi-detector Composite Rule 2: DGA + C2 Beaconing
+        # -------------------------------------------------------------
+        # COMPOSITE RULE 2: DGA + C2 Beaconing (or Suspicious Encrypted + Beaconing)
+        # -------------------------------------------------------------
         if (
             "dga_detector" in det_map and
             "beaconing_detector" in det_map
@@ -104,7 +110,7 @@ class ThreatFusionEngine:
                 "fusion_summary": "Periodic automated beaconing correlated with algorithmic pseudo-random DGA domain query",
                 "malicious_evidence": [
                     dga.evidence.get("threat_diagnosis", "Algorithmic domain name generation"),
-                    bcn.evidence.get("threat_diagnosis", "Strictly periodic beaconing heartbeat"),
+                    bcn.evidence.get("threat_diagnosis", "Periodic beaconing heartbeat"),
                 ],
                 "dga_signals": dga.evidence,
                 "beaconing_signals": bcn.evidence,
@@ -129,7 +135,50 @@ class ThreatFusionEngine:
                 final_alerts.append(alert)
             return final_alerts
 
-        # Multi-detector Composite Rule 3: Recon + Exfiltration
+        # -------------------------------------------------------------
+        # COMPOSITE RULE 3: Encrypted Traffic + C2 Beaconing / Anomaly
+        # -------------------------------------------------------------
+        if (
+            "encrypted_traffic_detector" in det_map and
+            "beaconing_detector" in det_map
+        ):
+            enc = det_map["encrypted_traffic_detector"]
+            bcn = det_map["beaconing_detector"]
+            fused_conf = min(0.99, max(enc.confidence, bcn.confidence) + self.confidence_boost)
+
+            combined_evidence = {
+                "fusion_summary": "Suspicious encrypted TLS/QUIC session correlated with C2 communication/beaconing pattern",
+                "malicious_evidence": [
+                    enc.evidence.get("threat_diagnosis", "Suspicious encrypted session"),
+                    bcn.evidence.get("threat_diagnosis", "C2 beaconing pattern"),
+                ],
+                "encrypted_signals": enc.evidence,
+                "beaconing_signals": bcn.evidence,
+                "passive_guarantee": "Forensic evaluation performed on observable flow metadata. Zero payload decryption.",
+            }
+
+            alert = StandardAlert(
+                timestamp=now_iso,
+                flow_id=flow_features.get("flow_id", "unknown"),
+                src_ip=flow_features.get("src_ip", "0.0.0.0"),
+                src_port=flow_features.get("src_port", 0),
+                dst_ip=flow_features.get("dst_ip", "0.0.0.0"),
+                dst_port=flow_features.get("dst_port", 0),
+                protocol=flow_features.get("protocol", "TCP"),
+                threat_class="BOTNET_C2_INFRASTRUCTURE",
+                severity=SeverityLevel.CRITICAL,
+                confidence=round(fused_conf, 4),
+                detector="fusion_engine (encrypted + beaconing)",
+                input_source=input_source,
+                evidence=combined_evidence,
+            )
+            if self._should_emit(alert, now_ts):
+                final_alerts.append(alert)
+            return final_alerts
+
+        # -------------------------------------------------------------
+        # COMPOSITE RULE 4: Recon + Exfiltration
+        # -------------------------------------------------------------
         if (
             "recon_detector" in det_map and
             "exfiltration_detector" in det_map
@@ -161,9 +210,10 @@ class ThreatFusionEngine:
                 final_alerts.append(alert)
             return final_alerts
 
+        # -------------------------------------------------------------
         # Standard / Single Detector alert forwarding with explainability structure
+        # -------------------------------------------------------------
         for det in detections:
-            # Handle unknown anomaly or low-confidence ambiguous signals
             threat_class = det.threat_class
             confidence = det.confidence
             severity = det.severity

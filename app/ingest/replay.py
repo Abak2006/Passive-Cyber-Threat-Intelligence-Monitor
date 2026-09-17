@@ -210,7 +210,7 @@ class PCAPReplayEngine:
                 backward_packets=flow_dict.get("backward_packets", 0),
                 forward_bytes=flow_dict.get("forward_bytes", 0),
                 backward_bytes=flow_dict.get("backward_bytes", 0),
-                input_source=getattr(self.source, "source_type", "pcap_replay"),
+                input_source=getattr(self.source, "input_source", getattr(self.source, "source_type", "pcap_replay")),
             )
             self.db.queue_flow(record)
         except Exception:

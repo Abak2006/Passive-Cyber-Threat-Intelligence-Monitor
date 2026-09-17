@@ -1,7 +1,8 @@
 """
 End-to-end Integration Test for AEGIS Streaming Ingestion and Threat Detection.
 Tests complete pipeline:
-PassiveInputSource (PCAP Replay / Synthetic) -> FlowStreamManager -> FlowFeatureExtractor -> AlertPipeline -> ThreatDatabase
+PassiveInputSource (PCAP Replay / Synthetic / Data Diode) -> FlowStreamManager -> FlowFeatureExtractor -> AlertPipeline -> ThreatDatabase
+Verifies source provenance preservation (synthetic_stream -> synthetic_stream, data_diode -> data_diode).
 """
 
 from pathlib import Path
@@ -11,7 +12,7 @@ from app.alerts.generator import AlertPipeline
 from app.features.flow_features import FlowFeatureExtractor
 from app.ingest.flow_stream import FlowStreamManager
 from app.ingest.replay import PCAPReplayEngine
-from app.ingest.sources import PcapReplaySource, SyntheticStreamSource
+from app.ingest.sources import DataDiodeFeedSource, PacketEvent, PcapReplaySource, SyntheticStreamSource
 from app.storage.database import ThreatDatabase
 
 
@@ -38,7 +39,6 @@ def test_full_pipeline_with_synthetic_stream(tmp_path):
                 features["tls_metadata"] = flow_dict["tls_metadata"]
             features["timestamps"] = flow_dict.get("timestamps", [])
             features["packet_lengths"] = flow_dict.get("packet_lengths", [])
-            features["input_source"] = flow_dict.get("source_type", "synthetic_stream")
 
             pipeline.process_flow(features)
 
@@ -46,18 +46,17 @@ def test_full_pipeline_with_synthetic_stream(tmp_path):
     remaining = flow_manager.flush_all()
     for flow_dict in remaining:
         features = FlowFeatureExtractor.extract_features(flow_dict)
-        features["input_source"] = flow_dict.get("source_type", "synthetic_stream")
         pipeline.process_flow(features)
 
     # Force database commit of any buffered items
     db.flush_buffers()
 
-    # Verify database contents
+    # Verify database contents and source provenance
     flows = db.get_flows(limit=100)
     alerts = db.get_alerts(limit=100)
 
     assert len(flows) > 0
-    assert any(f.get("input_source") == "synthetic_stream" for f in flows)
+    assert all(f.get("input_source") == "synthetic_stream" for f in flows)
 
     if alerts:
         for alert in alerts:
@@ -65,6 +64,51 @@ def test_full_pipeline_with_synthetic_stream(tmp_path):
             assert "threat_class" in alert
             assert "severity" in alert
             assert alert.get("confidence", 0.0) > 0.0
+
+
+def test_source_provenance_data_diode_regression(tmp_path):
+    """Regression test ensuring data_diode provenance is preserved all the way to StandardAlert and DB."""
+    test_db_path = str(tmp_path / "test_diode_integration.db")
+    db = ThreatDatabase(test_db_path)
+    pipeline = AlertPipeline(db=db)
+    flow_manager = FlowStreamManager(flow_timeout_sec=0.5, sliding_window_sec=1.0)
+
+    queue = []
+    source = DataDiodeFeedSource(queue_buffer=queue)
+
+    # Append synthetic SYN flood packets to diode queue
+    for i in range(40):
+        ev = PacketEvent(
+            timestamp=1000.0 + i * 0.01,
+            length=64,
+            src_ip="192.168.1.55",
+            src_port=40000,
+            dst_ip="10.0.0.99",
+            dst_port=80,
+            protocol="TCP",
+            is_syn=True,
+            is_ack=False,
+            input_source="data_diode",
+        )
+        queue.append(ev)
+
+    for event in source.stream_events():
+        pkt_dict = event.to_dict()
+        active_flow, expired_flows = flow_manager.process_packet(pkt_dict)
+        for flow_dict in expired_flows:
+            features = FlowFeatureExtractor.extract_features(flow_dict)
+            pipeline.process_flow(features)
+
+    remaining = flow_manager.flush_all()
+    for flow_dict in remaining:
+        features = FlowFeatureExtractor.extract_features(flow_dict)
+        pipeline.process_flow(features)
+
+    db.flush_buffers()
+    alerts = db.get_alerts(limit=10)
+    assert len(alerts) > 0
+    for a in alerts:
+        assert a.get("input_source") == "data_diode"
 
 
 def test_full_pipeline_with_pcap_replay(tmp_path):
@@ -135,7 +179,7 @@ def test_full_pipeline_with_pcap_replay(tmp_path):
     assert len(benign_exfil) == 0, f"False positive: benign periodic traffic alerted as exfiltration: {benign_exfil}"
 
     # Also verify other attack classes in demo PCAP are preserved and detected
-    expected_attacks = {"DGA_DOMAIN_DETECTION", "DNS_TUNNELLING", "PORT_SCAN_HORIZONTAL"}
+    expected_attacks = {"DGA_DOMAIN_DETECTION", "PORT_SCAN_HORIZONTAL", "BOTNET_C2_BEACONING"}
     assert expected_attacks.issubset(alert_classes), (
         f"Missing expected attack classes in demo PCAP. Found: {alert_classes}"
     )

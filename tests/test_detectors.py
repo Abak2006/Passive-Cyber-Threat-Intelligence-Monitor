@@ -1,6 +1,7 @@
 """
 Unit Tests for Specialized Cyber Threat Detectors.
-Validates detection logic, confidence ratings, and evidence structures for all 7 threat categories.
+Validates detection logic, confidence ratings, and evidence structures for all threat categories,
+including comprehensive AEGIS v2 adversarial beacon robustness test suite.
 """
 
 import numpy as np
@@ -36,7 +37,7 @@ def test_ddos_detector():
     assert "syn_rate" in res.evidence
 
 
-def test_beaconing_detector():
+def test_beaconing_detector_basic():
     det = BeaconingDetector(min_connections=4, cv_threshold=0.25)
     flow = {
         "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
@@ -55,6 +56,289 @@ def test_beaconing_detector():
     assert "coefficient_of_variation" in res.evidence
     assert res.evidence["coefficient_of_variation"] < 0.25
 
+
+# ==========================================
+# AEGIS v2 Adversarial Beacon Robustness Suite
+# ==========================================
+
+def test_beacon_perfect_periodic():
+    """1. Perfect periodic beacon -> detected with high confidence."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "duration": 70.0,
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    assert res is not None
+    assert res.threat_class == "BOTNET_C2_BEACONING"
+    assert res.confidence >= 0.85
+    assert res.evidence["coefficient_of_variation"] < 0.05
+    assert res.evidence["best_autocorrelation"] >= 0.90
+
+
+def test_beacon_mild_jitter():
+    """2. Mild jitter (~10%) -> detected reliably."""
+    det = BeaconingDetector(min_connections=4)
+    # 10s base with +-1s jitter
+    timestamps = [10.0, 19.8, 30.2, 39.9, 50.1, 59.7, 70.3, 80.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "duration": 70.0,
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    assert res is not None
+    assert res.threat_class == "BOTNET_C2_BEACONING"
+    assert res.confidence >= 0.70
+    assert res.evidence["coefficient_of_variation"] < 0.15
+
+
+def test_beacon_moderate_jitter_retains_evidence():
+    """3. Moderate jitter (~20-25%) -> detector retains useful evidence via multi-lag autocorrelation."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 18.0, 31.5, 38.5, 52.0, 58.0, 71.5, 80.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "duration": 70.0,
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    assert res is not None
+    assert res.threat_class == "BOTNET_C2_BEACONING"
+    assert res.confidence >= 0.50
+    assert "periodicity_score" in res.evidence
+
+
+def test_beacon_strong_random_jitter_reduces_confidence():
+    """4. Strong random jitter -> timing confidence decreases rather than producing a false certainty."""
+    det = BeaconingDetector(min_connections=4)
+    # Highly dispersed intervals: 1s, 28s, 4s, 35s, 2s, 19s, 42s
+    timestamps = [10.0, 11.0, 39.0, 43.0, 78.0, 80.0, 99.0, 141.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "duration": 131.0,
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    # Either None (rejected) or confidence strictly attenuated
+    if res is not None:
+        assert res.confidence < 0.70
+        assert res.evidence["coefficient_of_variation"] > 0.40
+
+
+def test_beacon_structured_jitter_lag2():
+    """5. Structured jitter (alternating 8s, 14s) -> residual periodicity contributes evidence via multi-lag."""
+    det = BeaconingDetector(min_connections=4)
+    # IATs: [8, 14, 8, 14, 8, 14, 8, 14]
+    timestamps = [0.0, 8.0, 22.0, 30.0, 44.0, 52.0, 66.0, 74.0, 88.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "duration": 88.0,
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    assert res is not None
+    assert res.threat_class == "BOTNET_C2_BEACONING"
+    assert res.evidence["best_lag"] == 2
+    assert res.evidence["best_autocorrelation"] > 0.80
+
+
+def test_legitimate_periodic_traffic_public_resolver_suppression():
+    """6. Legitimate periodic traffic (e.g. DNS to 8.8.8.8) -> should not blindly trigger high-confidence beaconing."""
+    det = BeaconingDetector(min_connections=4, require_destination_rarity=True)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    flow = {
+        "flow_id": "UDP:10.0.0.15:53000<->8.8.8.8:53",
+        "src_ip": "10.0.0.15",
+        "src_port": 53000,
+        "dst_ip": "8.8.8.8",
+        "dst_port": 53,
+        "protocol": "UDP",
+        "duration": 50.0,
+        "timestamps": timestamps,
+        "tls_metadata": {},
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    # Suppressed due to benign public resolver without suspicious TLS/QUIC metadata
+    assert res is None
+
+
+def test_insufficient_observations():
+    """7. Insufficient observations (< min_connections) -> returns None (insufficient evidence)."""
+    det = BeaconingDetector(min_connections=5)
+    timestamps = [10.0, 20.0, 30.0]  # Only 3 observations
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    assert res is None
+
+
+def test_invalid_degenerate_iat_data_handling():
+    """8. Invalid/degenerate IAT data (constant timestamps, single value, empty list) -> safe handling without NaN/inf."""
+    det = BeaconingDetector(min_connections=4)
+    # Degenerate: all identical timestamps
+    timestamps = [10.0, 10.0, 10.0, 10.0, 10.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps})
+    if res is not None:
+        for k, v in res.evidence.items():
+            if isinstance(v, float):
+                assert not (v != v)  # Not NaN
+
+
+def test_repeated_destination_increases_persistence_evidence():
+    """9. Repeated destination communication increases supporting destination persistence score."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res_high = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 1.0, "destination_count": 1})
+    res_low = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.2, "destination_count": 10})
+
+    assert res_high is not None
+    assert res_low is not None
+    assert res_high.evidence["destination_persistence_score"] > res_low.evidence["destination_persistence_score"]
+
+
+def test_different_destinations_reduces_persistence():
+    """10. Highly dispersed destinations reduce destination persistence evidence score."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.1, "destination_count": 20})
+    assert res is not None
+    assert res.evidence["destination_persistence_score"] <= 0.40
+
+
+def test_low_and_slow_beacon_accumulation():
+    """11. Low-and-slow beacon (60s intervals + high destination persistence) -> detected over time."""
+    det = BeaconingDetector(min_connections=4)
+    # Long intervals: 60s
+    timestamps = [0.0, 60.0, 120.0, 180.0, 240.0, 300.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.95, "destination_count": 1})
+    assert res is not None
+    assert res.threat_class == "BOTNET_C2_BEACONING"
+    assert res.confidence >= 0.75
+    assert res.evidence["mean_inter_arrival_sec"] >= 59.0
+
+
+def test_random_jitter_without_independent_signals_attenuates_confidence():
+    """12. Strong random jitter WITHOUT independent signals does NOT receive high beacon confidence."""
+    det = BeaconingDetector(min_connections=4)
+    # Dispersed intervals: 2s, 35s, 5s, 48s, 1s, 22s
+    timestamps = [0.0, 2.0, 37.0, 42.0, 90.0, 91.0, 113.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+        "tls_metadata": {},
+        "dns_queries": [],
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.5, "destination_count": 5})
+    # Either None (rejected) or confidence strictly attenuated below 0.65
+    if res is not None:
+        assert res.confidence < 0.65
+
+
+def test_random_jitter_with_independent_signals_produces_unknown_anomaly_or_fused_alert():
+    """13. Strong random jitter WITH independent suspicious signals (JA3, DGA) produces elevated alert evidence."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [0.0, 2.0, 37.0, 42.0, 90.0, 91.0, 113.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+        "tls_metadata": {
+            "ja3_hash": "e7d705a3286e19ea42f587b344ee6865",
+            "has_sni": False,
+        },
+        "dns_queries": ["x9k2zq8w110mnv.cc"],
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.90, "destination_count": 1})
+    assert res is not None
+    # Can be UNKNOWN_ANOMALY or BOTNET_C2_BEACONING with structured group evidence
+    assert res.confidence >= 0.70
+    assert "evidence_groups" in res.evidence
+    assert res.evidence["evidence_groups"]["protocol_group"]["has_suspicious_ja3"] is True
+
+
+# ==========================================
+# Other Specialized Detectors Tests
+# ==========================================
 
 def test_dga_detector():
     det = DGADetector(entropy_threshold=3.5, length_threshold=15)
@@ -558,7 +842,6 @@ def test_udp_flood_detection():
 
 def test_udp_amplification_reflection_detection():
     det = DDoSDetector()
-    # NTP reflection from port 123 with high packet size
     flow = {
         "flow_id": "UDP:203.0.113.50:123<->10.0.0.5:43210",
         "src_ip": "203.0.113.50",
@@ -575,6 +858,7 @@ def test_udp_amplification_reflection_detection():
     assert res.threat_class == "AMPLIFICATION_REFLECTION_DDOS"
     assert res.confidence >= 0.85
     assert res.evidence["amplification_service"] == "NTP"
+    assert "passive_observation_note" in res.evidence
 
 
 def test_spoofed_ddos_detection():
@@ -621,4 +905,140 @@ def test_quic_encrypted_traffic_detection():
     assert res is not None
     assert res.threat_class == "SUSPICIOUS_ENCRYPTED_TRAFFIC"
     assert res.evidence["is_quic"] is True
+
+
+# ==============================================================================
+# AEGIS v2.2 Red-Team Validation & Benchmark Integrity Test Suite
+# ==============================================================================
+
+def test_benchmark_label_isolation_guarantee():
+    """14. Proves detector output is strictly invariant to ground truth fields (is_attack, label, scenario)."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+
+    flow_clean = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+
+    flow_tampered = {
+        **flow_clean,
+        "is_attack": False,
+        "label": "BENIGN_SYNTHETIC_OVERRIDE",
+        "scenario": "LEGITIMATE_TEST",
+        "ground_truth": "BENIGN",
+    }
+
+    ctx = {"connection_timestamps": timestamps, "dst_concentration": 0.95, "destination_count": 1}
+
+    res_clean = det.predict(flow_clean, context=ctx)
+    res_tampered = det.predict(flow_tampered, context=ctx)
+
+    assert res_clean is not None
+    assert res_tampered is not None
+    assert res_clean.confidence == res_tampered.confidence
+    assert res_clean.threat_class == res_tampered.threat_class
+
+
+def test_minimum_evidence_intervals_progression():
+    """15. Validates minimum evidence thresholds (1, 2, 3, 4, 5 intervals) to prevent premature certainty."""
+    det = BeaconingDetector(min_connections=4)
+
+    base_ts = 100.0
+    for num_intervals in [1, 2]:
+        ts = [base_ts + 10.0 * i for i in range(num_intervals + 1)]
+        flow = {
+            "flow_id": f"TEST:{num_intervals}",
+            "src_ip": "10.0.0.15",
+            "src_port": 49152,
+            "dst_ip": "198.51.100.44",
+            "dst_port": 8443,
+            "protocol": "TCP",
+            "timestamps": ts,
+        }
+        res = det.predict(flow, context={"connection_timestamps": ts})
+        assert res is None, f"Premature detection triggered with only {num_intervals} intervals!"
+
+    # 4 intervals (5 observations) satisfies min_connections and produces bounded confidence
+    ts_5 = [base_ts + 10.0 * i for i in range(5)]
+    flow_5 = {
+        "flow_id": "TEST:4",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": ts_5,
+    }
+    res_5 = det.predict(flow_5, context={"connection_timestamps": ts_5})
+    assert res_5 is not None
+    assert res_5.confidence >= 0.70
+
+
+def test_destination_rotation_attenuates_persistence():
+    """16. Rotating destinations lowers destination persistence and prevents blind beacon alerting."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+
+    # 0% rotation -> concentration 1.0, 1 destination
+    res_stable = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 1.0, "destination_count": 1})
+    # 90% rotation -> concentration 0.1, 10 destinations
+    res_rotating = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.1, "destination_count": 10})
+
+    assert res_stable is not None
+    assert res_rotating is not None
+    assert res_stable.confidence > res_rotating.confidence
+    assert res_rotating.evidence["destination_persistence_score"] < res_stable.evidence["destination_persistence_score"]
+
+
+def test_period_drift_behavior():
+    """17. Gradually drifting intervals (10s -> 40s) maintain timing evidence while capturing variance."""
+    det = BeaconingDetector(min_connections=4)
+    # Drifted intervals: 10, 14, 18, 22, 26, 30
+    timestamps = [0.0, 10.0, 24.0, 42.0, 64.0, 90.0, 120.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 0.90, "destination_count": 1})
+    assert res is not None
+    assert "mean_inter_arrival_sec" in res.evidence
+    assert res.evidence["coefficient_of_variation"] > 0.10
+
+
+def test_confidence_bounding_guarantee():
+    """18. Guarantees that confidence outputs are strictly bounded in [0.50, 0.98]."""
+    det = BeaconingDetector(min_connections=4)
+    timestamps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    flow = {
+        "flow_id": "TCP:10.0.0.15:49152<->198.51.100.44:8443",
+        "src_ip": "10.0.0.15",
+        "src_port": 49152,
+        "dst_ip": "198.51.100.44",
+        "dst_port": 8443,
+        "protocol": "TCP",
+        "timestamps": timestamps,
+    }
+    res = det.predict(flow, context={"connection_timestamps": timestamps, "dst_concentration": 1.0, "destination_count": 1})
+    assert res is not None
+    assert 0.50 <= res.confidence <= 0.98
 

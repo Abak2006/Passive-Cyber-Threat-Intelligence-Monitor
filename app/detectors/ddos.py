@@ -125,7 +125,7 @@ class DDoSDetector(BaseDetector):
             threat_class = "AMPLIFICATION_REFLECTION_DDOS"
             confidence = min(0.97, 0.85 + min(0.10, amp_ratio / 50.0))
             severity = SeverityLevel.CRITICAL
-            reason = f"High asymmetric UDP volume consistent with {amp_service or 'reflection'} amplification attack."
+            reason = f"Traffic characteristics are consistent with UDP {amp_service or 'reflection'} amplification/reflection (high response/request ratio {amp_ratio:.1f})."
         elif is_spoofed:
             threat_class = "SPOOFED_SOURCE_DDOS"
             confidence = min(0.99, 0.85 + 0.04 * min(3.0, src_entropy))
@@ -184,6 +184,7 @@ class DDoSDetector(BaseDetector):
         if is_amplification:
             evidence["amplification_ratio"] = amp_ratio
             evidence["amplification_service"] = amp_service or "UDP"
+            evidence["passive_observation_note"] = "Traffic characteristics are consistent with UDP reflection/amplification; passive monitoring measures volume asymmetry without active probing."
 
         return DetectionResult(
             threat_class=threat_class,
