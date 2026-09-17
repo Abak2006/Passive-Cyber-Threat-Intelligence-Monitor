@@ -1,6 +1,7 @@
 """
-Standard Alert & Detection Schema for NTRO Passive Threat Intelligence.
-Strictly defines structured alert outputs, severity ratings, and evidence dictionaries.
+AEGIS Standard Alert & Detection Schema.
+Strictly defines structured alert outputs, severity ratings, and explainable evidence dictionaries.
+Guarantees zero-probe, zero-decryption forensic metadata capture.
 """
 
 from datetime import datetime, timezone
@@ -34,8 +35,8 @@ class DetectionResult(BaseModel):
 
 class StandardAlert(BaseModel):
     """
-    Standard Alert Schema required by NTRO specifications.
-    Every emitted alert must strictly follow this structure.
+    Standard Alert Schema for AEGIS Passive Threat Intelligence.
+    Every emitted alert strictly follows this structured format.
     """
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
@@ -50,6 +51,7 @@ class StandardAlert(BaseModel):
     severity: SeverityLevel
     confidence: float = Field(..., ge=0.0, le=1.0)
     detector: str
+    input_source: str = "pcap_replay"
     evidence: Dict[str, Any]
 
     @field_validator("confidence")
@@ -78,3 +80,4 @@ class FlowRecord(BaseModel):
     backward_packets: int
     forward_bytes: int
     backward_bytes: int
+    input_source: str = "pcap_replay"

@@ -1,5 +1,5 @@
 """
-NTRO Passive Cyber Threat Detection Engine
+AEGIS Passive Cyber Threat Intelligence Platform
 Unidirectional IP Traffic Monitoring & AI-Based Threat Intelligence
 """
 

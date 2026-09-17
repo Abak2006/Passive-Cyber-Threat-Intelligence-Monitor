@@ -1,5 +1,5 @@
 """
-Configuration Loader for NTRO Cyber Threat Detection System.
+Configuration Loader for AEGIS Cyber Threat Detection System.
 Loads YAML settings with environment variable overrides and safe defaults.
 """
 

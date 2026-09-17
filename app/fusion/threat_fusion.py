@@ -1,7 +1,7 @@
 """
 Threat Fusion Engine.
-Correlates outputs from individual detectors, applies multi-vector behavioral rules,
-synthesizes composite threat assessments, and generates structured StandardAlerts.
+Correlates outputs from individual detectors, synthesizes composite threat assessments,
+handles unknown anomaly classifications, and generates structured, explainable StandardAlerts.
 """
 
 from collections import defaultdict
@@ -15,7 +15,8 @@ from app.alerts.schema import DetectionResult, SeverityLevel, StandardAlert
 class ThreatFusionEngine:
     """
     Synthesizes and correlates multi-detector outputs into unified, explainable threat alerts.
-    Also handles sliding-window alert deduplication to prevent alert storms.
+    Distinguishes Malicious Evidence, Benign Evidence, and Insufficient Evidence.
+    Deduplicates repetitive alerts on identical endpoints within a sliding time window.
     """
 
     def __init__(
@@ -38,18 +39,16 @@ class ThreatFusionEngine:
     ) -> List[StandardAlert]:
         """
         Receives raw detection candidates for a flow/context.
-        Emits synthesized StandardAlert objects.
+        Emits synthesized StandardAlert objects with explainable evidence.
         """
         if not detections:
             return []
 
         now_ts = flow_features.get("end_time") or time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
+        input_source = flow_features.get("source_type", "pcap_replay")
 
-        # Group detections by target/flow
         det_map = {d.detector: d for d in detections}
-        threat_classes = set(d.threat_class for d in detections)
-
         final_alerts: List[StandardAlert] = []
 
         # Multi-detector Composite Rule 1: Encrypted Traffic + Data Exfiltration
@@ -63,8 +62,14 @@ class ThreatFusionEngine:
 
             combined_evidence = {
                 "fusion_summary": "Correlated high-volume outbound asymmetric transfer inside encrypted session with suspicious metadata",
+                "malicious_evidence": [
+                    enc.evidence.get("threat_diagnosis", "Suspicious encrypted session"),
+                    exf.evidence.get("threat_diagnosis", "High outbound byte transfer"),
+                ],
+                "encrypted_signals": enc.evidence,
                 "encrypted_traffic_signals": enc.evidence,
                 "exfiltration_signals": exf.evidence,
+                "passive_guarantee": "Forensic evaluation performed on observable flow metadata. Zero payload decryption.",
             }
 
             alert = StandardAlert(
@@ -79,6 +84,7 @@ class ThreatFusionEngine:
                 severity=SeverityLevel.CRITICAL,
                 confidence=round(fused_conf, 4),
                 detector="fusion_engine (encrypted + exfiltration)",
+                input_source=input_source,
                 evidence=combined_evidence,
             )
             if self._should_emit(alert, now_ts):
@@ -96,6 +102,10 @@ class ThreatFusionEngine:
 
             combined_evidence = {
                 "fusion_summary": "Periodic automated beaconing correlated with algorithmic pseudo-random DGA domain query",
+                "malicious_evidence": [
+                    dga.evidence.get("threat_diagnosis", "Algorithmic domain name generation"),
+                    bcn.evidence.get("threat_diagnosis", "Strictly periodic beaconing heartbeat"),
+                ],
                 "dga_signals": dga.evidence,
                 "beaconing_signals": bcn.evidence,
             }
@@ -112,6 +122,7 @@ class ThreatFusionEngine:
                 severity=SeverityLevel.CRITICAL,
                 confidence=round(fused_conf, 4),
                 detector="fusion_engine (dga + beaconing)",
+                input_source=input_source,
                 evidence=combined_evidence,
             )
             if self._should_emit(alert, now_ts):
@@ -139,14 +150,37 @@ class ThreatFusionEngine:
                 severity=SeverityLevel.CRITICAL,
                 confidence=round(fused_conf, 4),
                 detector="fusion_engine (recon + exfiltration)",
-                evidence={"recon_signals": rcn.evidence, "exfiltration_signals": exf.evidence},
+                input_source=input_source,
+                evidence={
+                    "fusion_summary": "Reconnaissance scan followed immediately by high-volume data exfiltration",
+                    "recon_signals": rcn.evidence,
+                    "exfiltration_signals": exf.evidence
+                },
             )
             if self._should_emit(alert, now_ts):
                 final_alerts.append(alert)
             return final_alerts
 
-        # Standard / Single Detector alert forwarding
+        # Standard / Single Detector alert forwarding with explainability structure
         for det in detections:
+            # Handle unknown anomaly or low-confidence ambiguous signals
+            threat_class = det.threat_class
+            confidence = det.confidence
+            severity = det.severity
+
+            if confidence < 0.50:
+                threat_class = "INSUFFICIENT_EVIDENCE"
+                severity = SeverityLevel.LOW
+            elif "anomaly" in threat_class.lower() and confidence < 0.70:
+                threat_class = "UNKNOWN_ANOMALY"
+                severity = SeverityLevel.MEDIUM
+
+            # Structure evidence into explainable categories
+            evidence_dict = dict(det.evidence)
+            if "malicious_evidence" not in evidence_dict:
+                diag = evidence_dict.get("threat_diagnosis")
+                evidence_dict["malicious_evidence"] = [diag] if diag else ["Anomalous statistical deviation observed."]
+
             alert = StandardAlert(
                 timestamp=now_iso,
                 flow_id=flow_features.get("flow_id", "unknown"),
@@ -155,11 +189,12 @@ class ThreatFusionEngine:
                 dst_ip=flow_features.get("dst_ip", "0.0.0.0"),
                 dst_port=flow_features.get("dst_port", 0),
                 protocol=flow_features.get("protocol", "TCP"),
-                threat_class=det.threat_class,
-                severity=det.severity,
-                confidence=round(det.confidence, 4),
+                threat_class=threat_class,
+                severity=severity,
+                confidence=round(confidence, 4),
                 detector=det.detector,
-                evidence=det.evidence,
+                input_source=input_source,
+                evidence=evidence_dict,
             )
             if self._should_emit(alert, now_ts):
                 final_alerts.append(alert)

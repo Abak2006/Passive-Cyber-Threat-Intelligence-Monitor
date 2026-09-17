@@ -1,10 +1,12 @@
 """
 SQLite Database Layer with WAL Mode for High Concurrency.
 Stores alerts, network flow summaries, and real-time throughput metrics.
+Includes streaming batch commit buffering and input_source provenance tracking.
 """
 
 import json
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
@@ -16,9 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class ThreatDatabase:
-    def __init__(self, db_path: str = "data/threats.db"):
+    def __init__(self, db_path: str = "data/threats.db", batch_buffer_size: int = 50):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.batch_buffer_size = batch_buffer_size
+        self._alert_buffer: List[StandardAlert] = []
+        self._flow_buffer: List[FlowRecord] = []
+        self._last_flush_time = time.time()
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -51,6 +57,7 @@ class ThreatDatabase:
                     severity TEXT NOT NULL,
                     confidence REAL NOT NULL,
                     detector TEXT NOT NULL,
+                    input_source TEXT DEFAULT 'pcap_replay',
                     evidence_json TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -59,6 +66,12 @@ class ThreatDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_threat ON alerts(threat_class);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_sev ON alerts(severity);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_flow ON alerts(flow_id);")
+
+            # Check if input_source column exists in existing DBs
+            cursor.execute("PRAGMA table_info(alerts);")
+            alert_cols = [c[1] for c in cursor.fetchall()]
+            if "input_source" not in alert_cols:
+                cursor.execute("ALTER TABLE alerts ADD COLUMN input_source TEXT DEFAULT 'pcap_replay';")
 
             # Flows table
             cursor.execute("""
@@ -78,10 +91,16 @@ class ThreatDatabase:
                     backward_packets INTEGER NOT NULL,
                     forward_bytes INTEGER NOT NULL,
                     backward_bytes INTEGER NOT NULL,
+                    input_source TEXT DEFAULT 'pcap_replay',
                     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_flows_end ON flows(end_time);")
+
+            cursor.execute("PRAGMA table_info(flows);")
+            flow_cols = [c[1] for c in cursor.fetchall()]
+            if "input_source" not in flow_cols:
+                cursor.execute("ALTER TABLE flows ADD COLUMN input_source TEXT DEFAULT 'pcap_replay';")
 
             # System metrics timeline table
             cursor.execute("""
@@ -105,8 +124,8 @@ class ThreatDatabase:
             cursor.execute("""
                 INSERT INTO alerts (
                     timestamp, flow_id, src_ip, src_port, dst_ip, dst_port,
-                    protocol, threat_class, severity, confidence, detector, evidence_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    protocol, threat_class, severity, confidence, detector, input_source, evidence_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 alert.timestamp,
                 alert.flow_id,
@@ -119,6 +138,7 @@ class ThreatDatabase:
                 alert.severity.value if isinstance(alert.severity, SeverityLevel) else str(alert.severity),
                 float(alert.confidence),
                 alert.detector,
+                getattr(alert, "input_source", "pcap_replay"),
                 json.dumps(alert.evidence)
             ))
             conn.commit()
@@ -132,8 +152,8 @@ class ThreatDatabase:
             cursor.executemany("""
                 INSERT INTO alerts (
                     timestamp, flow_id, src_ip, src_port, dst_ip, dst_port,
-                    protocol, threat_class, severity, confidence, detector, evidence_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    protocol, threat_class, severity, confidence, detector, input_source, evidence_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 (
                     a.timestamp,
@@ -147,6 +167,7 @@ class ThreatDatabase:
                     a.severity.value if isinstance(a.severity, SeverityLevel) else str(a.severity),
                     float(a.confidence),
                     a.detector,
+                    getattr(a, "input_source", "pcap_replay"),
                     json.dumps(a.evidence)
                 ) for a in alerts
             ])
@@ -159,8 +180,8 @@ class ThreatDatabase:
                 INSERT OR REPLACE INTO flows (
                     flow_id, start_time, end_time, src_ip, src_port, dst_ip, dst_port,
                     protocol, packet_count, byte_count, duration_sec,
-                    forward_packets, backward_packets, forward_bytes, backward_bytes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    forward_packets, backward_packets, forward_bytes, backward_bytes, input_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 flow.flow_id,
                 flow.start_time,
@@ -176,9 +197,52 @@ class ThreatDatabase:
                 flow.forward_packets,
                 flow.backward_packets,
                 flow.forward_bytes,
-                flow.backward_bytes
+                flow.backward_bytes,
+                getattr(flow, "input_source", "pcap_replay")
             ))
             conn.commit()
+
+    def queue_alert(self, alert: StandardAlert):
+        """Buffers alerts for streaming batch persistence."""
+        self._alert_buffer.append(alert)
+        if len(self._alert_buffer) >= self.batch_buffer_size or (time.time() - self._last_flush_time) > 2.0:
+            self.flush_buffers()
+
+    def queue_flow(self, flow: FlowRecord):
+        """Buffers flows for streaming batch persistence."""
+        self._flow_buffer.append(flow)
+        if len(self._flow_buffer) >= self.batch_buffer_size or (time.time() - self._last_flush_time) > 2.0:
+            self.flush_buffers()
+
+    def flush_buffers(self):
+        """Flushes buffered alerts and flows in a single transaction."""
+        if self._alert_buffer:
+            to_insert = self._alert_buffer[:]
+            self._alert_buffer.clear()
+            self.insert_alerts(to_insert)
+
+        if self._flow_buffer:
+            to_insert = self._flow_buffer[:]
+            self._flow_buffer.clear()
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.executemany("""
+                    INSERT OR REPLACE INTO flows (
+                        flow_id, start_time, end_time, src_ip, src_port, dst_ip, dst_port,
+                        protocol, packet_count, byte_count, duration_sec,
+                        forward_packets, backward_packets, forward_bytes, backward_bytes, input_source
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, [
+                    (
+                        f.flow_id, f.start_time, f.end_time, f.src_ip, f.src_port, f.dst_ip, f.dst_port,
+                        f.protocol, f.packet_count, f.byte_count, f.duration_sec,
+                        f.forward_packets, f.backward_packets, f.forward_bytes, f.backward_bytes,
+                        getattr(f, "input_source", "pcap_replay")
+                    ) for f in to_insert
+                ])
+                conn.commit()
+
+        self._last_flush_time = time.time()
 
     def record_metrics(
         self,
@@ -210,6 +274,7 @@ class ThreatDatabase:
         severity: Optional[str] = None,
         threat_class: Optional[str] = None
     ) -> List[Dict[str, Any]]:
+        self.flush_buffers()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             query = "SELECT * FROM alerts"
@@ -236,7 +301,26 @@ class ThreatDatabase:
                 results.append(item)
             return results
 
+    def get_alerts(
+        self,
+        limit: int = 50,
+        severity: Optional[str] = None,
+        threat_class: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Convenience alias for get_recent_alerts."""
+        return self.get_recent_alerts(limit=limit, severity=severity, threat_class=threat_class)
+
+    def get_flows(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retrieves recently recorded network flows."""
+        self.flush_buffers()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM flows ORDER BY end_time DESC LIMIT ?", (limit,))
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
     def get_alert_counts_by_severity(self) -> Dict[str, int]:
+        self.flush_buffers()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT severity, COUNT(*) as count FROM alerts GROUP BY severity")
@@ -249,6 +333,7 @@ class ThreatDatabase:
             return counts
 
     def get_alert_counts_by_threat(self) -> Dict[str, int]:
+        self.flush_buffers()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT threat_class, COUNT(*) as count FROM alerts GROUP BY threat_class ORDER BY count DESC")
@@ -266,6 +351,7 @@ class ThreatDatabase:
             return [dict(r) for r in reversed(rows)]
 
     def get_system_stats(self) -> Dict[str, Any]:
+        self.flush_buffers()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) as total_flows, SUM(byte_count) as total_bytes FROM flows")
@@ -297,6 +383,8 @@ class ThreatDatabase:
             }
 
     def clear_data(self):
+        self._alert_buffer.clear()
+        self._flow_buffer.clear()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM alerts;")

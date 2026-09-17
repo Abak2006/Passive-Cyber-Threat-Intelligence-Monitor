@@ -1,5 +1,5 @@
 """
-Model Training Pipeline for NTRO Threat Detectors.
+Model Training Pipeline for AEGIS Threat Detectors.
 Trains and evaluates supervised classifiers and anomaly detectors without train/test leakage.
 Saves serialized models under models/ directory using joblib.
 """
@@ -192,7 +192,7 @@ def train_exfil_model(data_path: Path, models_dir: Path) -> Dict[str, Any]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train NTRO Cyber Threat Detectors")
+    parser = argparse.ArgumentParser(description="Train AEGIS Cyber Threat Detectors")
     parser.add_argument(
         "--detector",
         choices=["ddos", "dga", "encrypted", "exfil", "all"],

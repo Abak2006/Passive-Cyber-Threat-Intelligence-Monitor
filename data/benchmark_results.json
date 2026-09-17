@@ -1,0 +1,34 @@
+{
+  "platform": {
+    "system": "Windows",
+    "release": "10",
+    "machine": "AMD64",
+    "python_version": "3.9.13",
+    "cpu_count": 16
+  },
+  "pcap_source": "In-Memory Synthetic Stream",
+  "timestamp": 1789656011.2199123,
+  "runs": [
+    {
+      "speed_setting": "max (unthrottled)",
+      "speed_factor": 0.0,
+      "duration_sec": 0.801,
+      "total_packets": 5000,
+      "total_flows": 10,
+      "total_alerts": 3,
+      "packets_per_sec": 6245.8,
+      "flows_per_sec": 12.5,
+      "alerts_per_sec": 3.75,
+      "latency_mean_ms": 17.859,
+      "latency_p50_ms": 13.582,
+      "latency_p95_ms": 38.891,
+      "latency_p99_ms": 45.114,
+      "latency_max_ms": 45.373,
+      "initial_memory_mb": 267.9,
+      "peak_memory_mb": 268.2,
+      "final_memory_mb": 268.2,
+      "memory_delta_mb": 0.3,
+      "cpu_percent": 0.0
+    }
+  ]
+}

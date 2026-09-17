@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================================="
-echo "   NTRO PASSIVE CYBER THREAT DETECTION - LIVE DEMO"
+echo "   AEGIS PASSIVE CYBER THREAT DETECTION - LIVE DEMO"
 echo "   Environment: Passive Monitoring Enclave (Data Diode)"
 echo "========================================================="
 

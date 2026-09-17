@@ -12,6 +12,15 @@ from training.dataset_adapters.base_adapter import BaseDatasetAdapter
 
 
 class DNSDatasetAdapter(BaseDatasetAdapter):
+    """
+    Adapter for DNS datasets (e.g. CIC-Bell-DNS2021, DGA feeds, Alexa/Tranco top domains).
+    Extracts lexical features for training the DGA supervised model from passively
+    observed query strings without active DNS resolution or server probing.
+    """
+
+    def __init__(self, dataset_path: str, unidirectional_only: bool = True):
+        super().__init__(dataset_path=dataset_path, unidirectional_only=unidirectional_only)
+
     def load_and_transform(self, max_samples: Optional[int] = None) -> Tuple[pd.DataFrame, pd.Series]:
         if not self.dataset_path.exists():
             raise FileNotFoundError(f"DNS dataset not found at {self.dataset_path}")

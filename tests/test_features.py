@@ -105,3 +105,88 @@ def test_tls_feature_extractor_no_decryption():
     assert len(res["ja3_hash"]) == 32
     assert res["has_sni"] is True
     assert res["ciphers_count"] == 2
+
+
+def test_ip_and_port_entropy_metrics():
+    from app.features.entropy import (
+        source_ip_entropy,
+        destination_ip_entropy,
+        destination_port_entropy,
+        calculate_distribution_metrics,
+    )
+
+    # 1. Concentrated source (all from same IP)
+    single_src = [{"src_ip": "192.168.1.100", "dst_ip": "10.0.0.1", "dst_port": 80}] * 50
+    assert source_ip_entropy(single_src) == 0.0
+
+    # 2. Spoofed / Distributed sources (50 distinct IPs)
+    distributed_src = [
+        {"src_ip": f"172.16.0.{i}", "dst_ip": "10.0.0.1", "dst_port": 80}
+        for i in range(50)
+    ]
+    assert source_ip_entropy(distributed_src) > 5.0
+
+    # 3. Port scan (single destination IP, diverse destination ports)
+    port_scan = [
+        {"src_ip": "192.168.1.5", "dst_ip": "10.0.0.50", "dst_port": p}
+        for p in range(1, 65)
+    ]
+    assert destination_ip_entropy(port_scan) == 0.0
+    assert destination_port_entropy(port_scan) > 5.5
+
+    # 4. Distribution metrics
+    metrics = calculate_distribution_metrics(distributed_src, key="src_ip")
+    assert metrics["unique_count"] == 50
+    assert metrics["entropy"] > 5.0
+    assert metrics["herfindahl_index"] < 0.05
+    assert metrics["top_1_ratio"] == pytest.approx(0.02, rel=0.1)
+
+
+def test_dns_rolling_stats_record_type_distribution():
+    from app.features.dns_features import DNSRollingStats
+
+    stats = DNSRollingStats(window_size=20)
+    # Record standard A records
+    for _ in range(15):
+        stats.record_query("api.example.com", record_type=1)
+
+    # Record anomalous TXT records (record_type=16)
+    for _ in range(5):
+        stats.record_query("payload.tunnel.example.com", record_type=16)
+
+    dist = stats.get_distribution()
+    assert dist["total_queries"] == 20
+    assert dist["txt_ratio"] == 0.25
+    assert dist["null_ratio"] == 0.0
+    assert "A" in dist["record_types"]
+    assert "TXT" in dist["record_types"]
+
+
+def test_quic_feature_extractor_no_decryption():
+    from app.features.quic_features import QUICFeatureExtractor
+
+    # 1. Non-QUIC UDP packet
+    regular_udp = b"\x00\x01\x02\x03\x04"
+    assert QUICFeatureExtractor.is_quic_packet(regular_udp, 1234, 80) is False
+
+    # 2. Simulated QUIC Initial Long Header packet (RFC 9000: header_form=1, fixed_bit=1, type=0x00 Initial, version 1)
+    # First byte: 0xc0 (1100 0000 -> Long header, fixed bit 1, Initial packet)
+    quic_initial = bytearray([0xc0, 0x00, 0x00, 0x00, 0x01])  # Version 1 (0x00000001)
+    quic_initial.extend(b"\x08")  # DCID len 8
+    quic_initial.extend(b"\x11\x22\x33\x44\x55\x66\x77\x88")  # DCID
+    quic_initial.extend(b"\x00")  # SCID len 0
+    quic_initial.extend(b"\x00" * 1200)  # Padded Initial packet payload
+
+    quic_bytes = bytes(quic_initial)
+    assert QUICFeatureExtractor.is_quic_packet(quic_bytes, 50000, 443) is True
+
+    parsed = QUICFeatureExtractor.parse_quic_packet(quic_bytes, 50000, 443)
+    assert parsed is not None
+    assert parsed["is_quic"] is True
+    assert parsed["header_type"] == "long"
+    assert parsed["is_initial"] is True
+    assert parsed["version"] == "0x00000001"
+    assert parsed["version_name"] == "QUIC-v1 (RFC 9000)"
+    assert parsed["length"] >= 1200
+    assert "inspection_note" in parsed
+
