@@ -13,8 +13,8 @@ from app.config import get_config
 from app.storage.database import ThreatDatabase
 
 app = FastAPI(
-    title="NTRO Passive Cyber Threat Intelligence API",
-    description="Unidirectional Network Monitoring and AI-Based Cyber Threat Detection Engine",
+    title="AEGIS Threat Intelligence API",
+    description="AI-Powered Passive Cyber Threat Intelligence & Unidirectional Network Monitoring",
     version="1.0.0"
 )
 
