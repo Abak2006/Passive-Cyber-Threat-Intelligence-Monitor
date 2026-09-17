@@ -34,163 +34,79 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional SOC Dark Theme Styling
+# Professional SOC Dark Theme: Clean, flat, minimal visual noise
 st.markdown("""
 <style>
-    /* Global Background & Typography */
+    /* Global Base */
     .stApp {
         background-color: #0B0F17;
         color: #E2E8F0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     
-    /* Header & Brand */
-    .aegis-brand-title {
-        font-size: 2.6rem;
+    /* Top Header Bar */
+    .aegis-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #1E293B;
+        margin-bottom: 16px;
+    }
+    .aegis-title-group {
+        display: flex;
+        flex-direction: column;
+    }
+    .aegis-title {
+        font-size: 1.55rem;
         font-weight: 800;
-        letter-spacing: -1px;
+        letter-spacing: -0.5px;
         color: #F8FAFC;
         line-height: 1.1;
         margin: 0;
     }
-    .aegis-brand-sub {
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: #38BDF8;
-        margin-top: 4px;
-        letter-spacing: 0.2px;
-    }
-    .aegis-brand-desc {
-        font-size: 0.85rem;
+    .aegis-subtitle {
+        font-size: 0.82rem;
+        font-weight: 500;
         color: #94A3B8;
-        margin-top: 4px;
-        margin-bottom: 14px;
+        margin-top: 3px;
     }
-
-    /* Passive Security Banner */
-    .security-status-banner {
+    .aegis-status-strip {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 8px;
-        padding: 10px 18px;
-        margin-bottom: 14px;
-    }
-    .status-badge-green {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.8px;
-        color: #10B981;
+        gap: 14px;
+        font-size: 0.76rem;
+        color: #94A3B8;
     }
     .status-dot-green {
-        width: 9px;
-        height: 9px;
+        width: 7px;
+        height: 7px;
         background-color: #10B981;
         border-radius: 50%;
         display: inline-block;
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
-    }
-    .status-guarantee-text {
-        font-size: 0.82rem;
-        color: #CBD5E1;
-        margin-left: 12px;
-    }
-    .status-arch-pill {
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #94A3B8;
-        background: #1E293B;
-        border: 1px solid #334155;
-        padding: 4px 10px;
-        border-radius: 6px;
-        letter-spacing: 0.5px;
+        margin-right: 4px;
     }
 
-    /* Unidirectional Topology Flow Strip */
-    .arch-flow-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: #0B1120;
-        border: 1px dashed #1E293B;
-        border-radius: 8px;
-        padding: 10px 16px;
-        margin-bottom: 22px;
-        font-size: 0.78rem;
+    /* Compact Metric Cards */
+    .metric-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 16px;
     }
-    .arch-flow-step {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-    .arch-step-name {
-        font-weight: 700;
-        color: #E2E8F0;
-        margin-top: 2px;
-    }
-    .arch-step-sub {
-        font-size: 0.7rem;
-        color: #64748B;
-    }
-    .arch-flow-arrow {
-        color: #38BDF8;
-        font-weight: 800;
-        font-size: 0.95rem;
-        padding: 0 8px;
-    }
-    .arch-step-diode {
-        background: #1E293B;
-        border: 1px solid #0284C7;
-        padding: 4px 10px;
-        border-radius: 6px;
-    }
-
-    /* SOC Metric Cards */
-    .metric-grid {
+    .metric-grid-5 {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
-        gap: 12px;
-        margin-bottom: 22px;
+        gap: 10px;
+        margin-bottom: 16px;
     }
     .metric-card {
         background: #0F172A;
         border: 1px solid #1E293B;
-        border-left: 4px solid #0284C7;
-        border-radius: 8px;
-        padding: 14px 16px;
+        border-left: 3px solid #0284C7;
+        border-radius: 6px;
+        padding: 10px 14px;
     }
-    .metric-label {
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        color: #94A3B8;
-        margin-bottom: 4px;
-    }
-    .metric-value {
-        font-size: 1.85rem;
-        font-weight: 800;
-        color: #F8FAFC;
-        line-height: 1.2;
-    }
-    .metric-unit {
-        font-size: 0.82rem;
-        font-weight: 500;
-        color: #64748B;
-    }
-    .metric-sub {
-        font-size: 0.75rem;
-        color: #64748B;
-        margin-top: 4px;
-    }
-
-    /* Severity Colors for Cards */
     .metric-card-critical {
         border-left-color: #EF4444;
     }
@@ -203,150 +119,95 @@ st.markdown("""
     .metric-card-high .metric-value {
         color: #FBBF24;
     }
-
-    /* Sidebar Status Badges */
-    .sidebar-status-header {
-        font-size: 0.72rem;
+    .metric-label {
+        font-size: 0.68rem;
         font-weight: 700;
-        letter-spacing: 0.8px;
-        color: #94A3B8;
         text-transform: uppercase;
-        margin-bottom: 6px;
-    }
-    .sidebar-status-beacon {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.85rem;
-        font-weight: 800;
-        letter-spacing: 0.6px;
-        color: #10B981;
-        margin-bottom: 12px;
-    }
-    .sidebar-status-table {
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 8px;
-        padding: 10px 12px;
-        margin-bottom: 16px;
-    }
-    .sidebar-status-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 5px 0;
-        border-bottom: 1px solid #1E293B;
-        font-size: 0.78rem;
-    }
-    .sidebar-status-row:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-    }
-    .sidebar-status-key {
+        letter-spacing: 0.5px;
         color: #94A3B8;
-        font-weight: 500;
+        margin-bottom: 2px;
     }
-    .sidebar-status-val {
+    .metric-value {
+        font-size: 1.55rem;
+        font-weight: 800;
         color: #F8FAFC;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 5px;
+        line-height: 1.2;
+    }
+    .metric-sub {
+        font-size: 0.70rem;
+        color: #64748B;
+        margin-top: 2px;
     }
 
     /* Section Subheaders */
-    .soc-section-title {
-        font-size: 1.15rem;
+    .soc-header {
+        font-size: 0.95rem;
         font-weight: 700;
         color: #F8FAFC;
+        letter-spacing: -0.2px;
         margin-bottom: 2px;
     }
-    .soc-section-sub {
-        font-size: 0.8rem;
+    .soc-sub {
+        font-size: 0.75rem;
+        color: #64748B;
+        margin-bottom: 10px;
+    }
+
+    /* Detail / Evidence Panel */
+    .detail-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 6px;
+        padding: 14px 16px;
+        font-size: 0.82rem;
+    }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        border-bottom: 1px solid #1E293B;
+    }
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    .detail-key {
+        color: #64748B;
+        font-weight: 500;
+    }
+    .detail-val {
+        color: #E2E8F0;
+        font-weight: 600;
+    }
+
+    /* Sidebar Clean Styling */
+    .sidebar-brand {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #F8FAFC;
+        letter-spacing: -0.5px;
+    }
+    .sidebar-sub {
+        font-size: 0.74rem;
         color: #94A3B8;
         margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #1E293B;
     }
-
-    /* Encrypted Traffic Architecture Callout */
-    .encrypted-flow-card {
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 8px;
-        padding: 14px 16px;
-        margin-top: 18px;
-        margin-bottom: 14px;
-    }
-    .pipeline-breadcrumb {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        font-size: 0.76rem;
-        font-weight: 600;
-    }
-    .crumb {
-        background: #1E293B;
-        color: #CBD5E1;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-    .crumb-arrow {
-        color: #38BDF8;
-        font-weight: 800;
-    }
-    .crumb-highlight {
-        background: #0369A1;
-        color: #F0F9FF;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    /* Sandbox simulation notice badge */
-    .sandbox-notice-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #172554;
-        border: 1px solid #1E40AF;
-        border-radius: 6px;
-        padding: 6px 12px;
-        font-size: 0.78rem;
-        color: #93C5FD;
-        margin-bottom: 14px;
-    }
-    .detector-badge-strip {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 20px;
-    }
-    .detector-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #0F172A;
-        border: 1px solid #1E293B;
-        border-radius: 6px;
-        padding: 6px 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #CBD5E1;
-    }
-    .detector-pill-active {
-        border-color: #059669;
-        color: #6EE7B7;
-    }
-    .input-source-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #1E293B;
-        border: 1px solid #0284C7;
-        color: #38BDF8;
-        border-radius: 6px;
-        padding: 4px 10px;
-        font-size: 0.75rem;
+    .sidebar-sec-label {
+        font-size: 0.68rem;
         font-weight: 700;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-top: 10px;
+        margin-bottom: 4px;
+    }
+    .sidebar-item {
+        font-size: 0.80rem;
+        color: #CBD5E1;
+        display: flex;
+        align-items: center;
+        margin-bottom: 3px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -367,95 +228,48 @@ source_display = source_labels.get(latest_source, latest_source.replace("_", " "
 # ==============================================================================
 # SIDEBAR
 # ==============================================================================
+# SIDEBAR: MINIMAL & CLEAN
+# ==============================================================================
 st.sidebar.markdown("""
-<div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #1E293B;">
-    <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 1.6rem;">🛡️</span>
-        <span style="font-size: 1.45rem; font-weight: 800; letter-spacing: -0.5px; color: #F8FAFC;">AEGIS</span>
-    </div>
-    <div style="font-size: 0.78rem; font-weight: 600; color: #38BDF8; margin-top: 2px;">
-        Passive Threat Intelligence
-    </div>
-</div>
+<div class="sidebar-brand">🛡️ AEGIS</div>
+<div class="sidebar-sub">AI-Powered Passive Cyber Threat Intelligence</div>
 """, unsafe_allow_html=True)
 
-# Non-Editable System Status Indicators
-st.sidebar.markdown(f"""
-<div class="sidebar-status-header">SYSTEM STATUS</div>
-<div class="sidebar-status-beacon">
-    <span class="status-dot-green"></span> PASSIVE
-</div>
-
-<div class="sidebar-status-table">
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Environment</span>
-        <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Passive</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Network Direction</span>
-        <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Unidirectional</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Active Input Source</span>
-        <span class="sidebar-status-val"><span style="color: #38BDF8;">●</span> {source_display}</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Ingest Mode</span>
-        <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Read-only</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Data Diode</span>
-        <span class="sidebar-status-val"><span style="color: #10B981;">●</span> Hardware</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Payload Decryption</span>
-        <div style="text-align: right;">
-            <span class="sidebar-status-val" style="justify-content: flex-end;"><span style="color: #94A3B8;">●</span> Disabled</span>
-            <div style="font-size: 0.68rem; color: #64748B; font-weight: 500;">Metadata Only</div>
-        </div>
-    </div>
-</div>
-
-<div class="sidebar-status-header" style="margin-top: 14px;">ACTIVE DETECTORS (7/7)</div>
-<div class="sidebar-status-table">
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">DDoS (SYN/UDP/Amp)</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">C2 Beaconing</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">DGA Classifier</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">DNS Tunneling</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Encrypted (TLS/QUIC)</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Recon / Port Scan</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-    <div class="sidebar-status-row">
-        <span class="sidebar-status-key">Data Exfiltration</span>
-        <span class="sidebar-status-val" style="color: #10B981;">● Active</span>
-    </div>
-</div>
+st.sidebar.markdown('<div class="sidebar-sec-label">SYSTEM</div>', unsafe_allow_html=True)
+st.sidebar.markdown("""
+<div class="sidebar-item"><span class="status-dot-green"></span> Passive</div>
+<div class="sidebar-item"><span class="status-dot-green"></span> Unidirectional</div>
+<div class="sidebar-item"><span class="status-dot-green"></span> Read-only</div>
 """, unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sidebar-sec-label">INPUT</div>', unsafe_allow_html=True)
+st.sidebar.markdown(f'<div class="sidebar-item" style="color: #38BDF8; font-weight: 600;">{source_display}</div>', unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sidebar-sec-label">ARCHITECTURE</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-item" style="color: #94A3B8;">Hardware Data Diode Ready</div>', unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sidebar-sec-label">DETECTORS</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-item"><span class="status-dot-green"></span> 7 Active</div>', unsafe_allow_html=True)
+
+with st.sidebar.expander("View Detector Status", expanded=False):
+    st.markdown("""
+    <div style="font-size: 0.76rem; line-height: 1.8;">
+        <div><span style="color: #10B981;">●</span> DDoS (SYN, UDP, Amp, Spoofed)</div>
+        <div><span style="color: #10B981;">●</span> C2 Beaconing (IAT, Autocorr)</div>
+        <div><span style="color: #10B981;">●</span> DGA Domains (Lexical RF)</div>
+        <div><span style="color: #10B981;">●</span> DNS Tunnels (TXT/NULL Stats)</div>
+        <div><span style="color: #10B981;">●</span> Encrypted Traffic (TLS/QUIC)</div>
+        <div><span style="color: #10B981;">●</span> Reconnaissance (Port Scan)</div>
+        <div><span style="color: #10B981;">●</span> Data Exfiltration (Bulk & Slow-Low)</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown('<div class="soc-section-title" style="font-size: 0.9rem;">Ingest & Update Mode</div>', unsafe_allow_html=True)
-
+st.sidebar.markdown('<div class="sidebar-sec-label">INGEST & POLLING</div>', unsafe_allow_html=True)
 passive_polling = st.sidebar.checkbox(
     "Passive Background Polling",
     value=True,
-    help="Continuously queries the passive telemetry database without reloading the webpage."
+    help="Polls local passive telemetry database periodically without reloading the browser."
 )
 
 poll_interval = 3
@@ -465,17 +279,17 @@ if passive_polling:
         min_value=1,
         max_value=10,
         value=3,
-        help="Rate at which passive background telemetry updates."
+        help="Polling interval in seconds."
     )
-    st.sidebar.caption("🟢 Status: Passive stream monitoring active")
+    st.sidebar.caption("● Stream polling active")
 else:
-    st.sidebar.caption("⚪ Status: Manual update mode")
+    st.sidebar.caption("○ Manual update mode")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown('<div class="soc-section-title" style="font-size: 0.9rem;">Alert Filters</div>', unsafe_allow_html=True)
-sev_filter = st.sidebar.selectbox("Filter by Severity", ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"])
+st.sidebar.markdown('<div class="sidebar-sec-label">FILTERS</div>', unsafe_allow_html=True)
+sev_filter = st.sidebar.selectbox("Severity", ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"])
 threat_filter = st.sidebar.selectbox(
-    "Filter by Threat Class",
+    "Threat Class",
     [
         "ALL",
         "SYN_FLOOD",
@@ -494,84 +308,66 @@ threat_filter = st.sidebar.selectbox(
     ]
 )
 
-st.sidebar.markdown("---")
-if st.sidebar.button("🧹 Clear System Data"):
-    db.clear_data()
-    st.sidebar.success("Database records cleared.")
-    st.rerun()
+with st.sidebar.expander("Data Maintenance", expanded=False):
+    if st.button("Clear System Data", use_container_width=True):
+        db.clear_data()
+        st.success("Database cleared.")
+        st.rerun()
 
 # ==============================================================================
-# MAIN HEADER & ARCHITECTURE TOPOLOGY
+# TOP HEADER & STATUS BAR
 # ==============================================================================
 st.markdown("""
-<div style="margin-bottom: 8px;">
-    <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 2.2rem;">🛡️</span>
-        <div>
-            <h1 class="aegis-brand-title">AEGIS</h1>
-            <div class="aegis-brand-sub">AI-Powered Passive Cyber Threat Intelligence</div>
+<div class="aegis-header">
+    <div class="aegis-title-group">
+        <h1 class="aegis-title">AEGIS</h1>
+        <div class="aegis-subtitle">AI-Powered Passive Cyber Threat Intelligence</div>
+    </div>
+    <div class="aegis-status-strip">
+        <span><span class="status-dot-green"></span>PASSIVE</span>
+        <span><span class="status-dot-green"></span>UNIDIRECTIONAL</span>
+        <span><span class="status-dot-green"></span>READ-ONLY</span>
+        <span style="color: #64748B;">|</span>
+        <span>PAYLOAD DECRYPTION: <strong style="color: #CBD5E1;">OFF</strong> (Metadata Only)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Collapsible Architecture Topology
+with st.expander("System Architecture (Unidirectional Physical Path)", expanded=False):
+    st.markdown("""
+    <div style="background: #0B1120; border: 1px dashed #1E293B; border-radius: 6px; padding: 10px 16px; font-size: 0.78rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div style="text-align: center;">
+            <div style="font-size: 1.1rem;">🏢</div>
+            <strong style="color: #E2E8F0;">Production Network</strong><br>
+            <span style="color: #64748B; font-size: 0.70rem;">Monitored Enclave</span>
+        </div>
+        <div style="color: #38BDF8; font-weight: 700; font-size: 0.85rem;">──(Passive Tap)──▶</div>
+        <div style="text-align: center; background: #1E293B; border: 1px solid #0284C7; padding: 4px 10px; border-radius: 4px;">
+            <div style="font-size: 1.1rem;">🔒</div>
+            <strong style="color: #E2E8F0;">Hardware Data Diode</strong><br>
+            <span style="color: #38BDF8; font-size: 0.70rem;">Physical 1-Way Fiber</span>
+        </div>
+        <div style="color: #38BDF8; font-weight: 700; font-size: 0.85rem;">──▶</div>
+        <div style="text-align: center;">
+            <div style="font-size: 1.1rem;">🛡️</div>
+            <strong style="color: #E2E8F0;">AEGIS Enclave</strong><br>
+            <span style="color: #64748B; font-size: 0.70rem;">Read-Only Sniffer / Replay</span>
+        </div>
+        <div style="color: #38BDF8; font-weight: 700; font-size: 0.85rem;">──▶</div>
+        <div style="text-align: center;">
+            <div style="font-size: 1.1rem;">🧠</div>
+            <strong style="color: #E2E8F0;">Threat Intelligence</strong><br>
+            <span style="color: #64748B; font-size: 0.70rem;">AI Models & Alerts</span>
         </div>
     </div>
-    <div class="aegis-brand-desc">Real-time threat detection from unidirectional network traffic</div>
-</div>
-""", unsafe_allow_html=True)
+    <div style="font-size: 0.72rem; color: #64748B; text-align: right;">
+        Note: Current interactive demo input is <code>PCAP Replay</code>. Production architecture ingests from physical optical data diode.
+    </div>
+    """, unsafe_allow_html=True)
 
-# Non-Interactive Passive Security Guarantee Banner
-st.markdown("""
-<div class="security-status-banner">
-    <div style="display: flex; align-items: center; flex-wrap: wrap;">
-        <span class="status-badge-green">
-            <span class="status-dot-green"></span> PASSIVE MODE
-        </span>
-        <span class="status-guarantee-text">
-            Read-only monitoring &bull; No return path &bull; No active probing &bull; No payload decryption
-        </span>
-    </div>
-    <span class="status-arch-pill">HARDWARE DATA DIODE</span>
-</div>
-""", unsafe_allow_html=True)
-
-# Unidirectional Flow Metaphor Strip (Requirement 9)
-st.markdown("""
-<div class="arch-flow-container">
-    <div class="arch-flow-step">
-        <span style="font-size: 1.1rem;">🏢</span>
-        <span class="arch-step-name">Production Network</span>
-        <span class="arch-step-sub">Monitored Enclave</span>
-    </div>
-    <div class="arch-flow-arrow">──(One-Way Tap)──▶</div>
-    <div class="arch-flow-step arch-step-diode">
-        <span style="font-size: 1.1rem;">🔒</span>
-        <span class="arch-step-name">Hardware Data Diode</span>
-        <span class="arch-step-sub" style="color: #38BDF8;">Physical 1-Way Barrier</span>
-    </div>
-    <div class="arch-flow-arrow">──▶</div>
-    <div class="arch-flow-step">
-        <span style="font-size: 1.1rem;">🛡️</span>
-        <span class="arch-step-name">AEGIS Ingest Enclave</span>
-        <span class="arch-step-sub">Read-Only Sniffer / Replay</span>
-    </div>
-    <div class="arch-flow-arrow">──▶</div>
-    <div class="arch-flow-step">
-        <span style="font-size: 1.1rem;">🧠</span>
-        <span class="arch-step-name">Threat Intelligence</span>
-        <span class="arch-step-sub">AI Classifiers & Alerts</span>
-    </div>
-</div>
-
-<div class="detector-badge-strip">
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DDoS (SYN, UDP, Amp, Spoofed)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> C2 Beaconing (IAT, Autocorr)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DGA Domains (Lexical RF)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> DNS Tunnels (TXT/NULL Stats)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Encrypted Traffic (TLS/QUIC)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Reconnaissance (Port Scan)</span>
-    <span class="detector-pill detector-pill-active"><span class="status-dot-green"></span> Data Exfiltration (Asymmetry ML)</span>
-</div>
-""", unsafe_allow_html=True)
-
-# Main Navigation Tabs
-tab_monitor, tab_benchmark, tab_sandbox = st.tabs(["📊 Live Threat Monitor", "⚡ Measured Benchmarks & Telemetry", "🧪 Threat Analysis Sandbox"])
+# Main Clean Navigation Tabs
+tab_monitor, tab_benchmark, tab_sandbox = st.tabs(["Live Monitor", "Benchmarks", "Sandbox"])
 
 # ==============================================================================
 # TAB 1: LIVE THREAT MONITOR (PASSIVE STREAMING FRAGMENT)
@@ -588,43 +384,41 @@ with tab_monitor:
         critical_alerts = stats.get("critical_alerts", 0)
         high_alerts = stats.get("high_alerts", 0)
 
-        # SOC Metric Cards
+        st.markdown('<div class="soc-header">LIVE THREAT MONITOR</div>', unsafe_allow_html=True)
+        st.markdown('<div class="soc-sub">Live passive monitoring</div>', unsafe_allow_html=True)
+
+        # 4 Primary Flat Metric Cards
         st.markdown(f"""
-        <div class="metric-grid">
+        <div class="metric-grid-4">
             <div class="metric-card">
-                <div class="metric-label">TOTAL FLOWS</div>
+                <div class="metric-label">FLOWS</div>
                 <div class="metric-value">{total_flows:,}</div>
                 <div class="metric-sub">Mirrored sessions</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">THROUGHPUT</div>
-                <div class="metric-value">{fps:,.1f} <span class="metric-unit">flows/s</span></div>
+                <div class="metric-value">{fps:,.1f} <span style="font-size: 0.75rem; color: #64748B; font-weight: 500;">flows/s</span></div>
                 <div class="metric-sub">{pps:,.1f} pkts/s</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">TOTAL ALERTS</div>
+                <div class="metric-label">ALERTS</div>
                 <div class="metric-value">{total_alerts:,}</div>
-                <div class="metric-sub">All threat classes</div>
+                <div class="metric-sub">Total detected events</div>
             </div>
             <div class="metric-card metric-card-critical">
                 <div class="metric-label" style="color: #F87171;">CRITICAL</div>
                 <div class="metric-value">{critical_alerts:,}</div>
-                <div class="metric-sub">Immediate attention</div>
-            </div>
-            <div class="metric-card metric-card-high">
-                <div class="metric-label" style="color: #FBBF24;">HIGH</div>
-                <div class="metric-value">{high_alerts:,}</div>
-                <div class="metric-sub">Elevated threats</div>
+                <div class="metric-sub">High: {high_alerts:,}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Visualizations: Traffic Throughput & Threat Distribution
+        # Charts: Throughput & Threat Distribution
         chart_col1, chart_col2 = st.columns([3, 2])
 
         with chart_col1:
-            st.markdown('<div class="soc-section-title">Traffic Throughput Over Time</div>', unsafe_allow_html=True)
-            st.markdown('<div class="soc-section-sub">Real-time ingestion and flow processing</div>', unsafe_allow_html=True)
+            st.markdown('<div class="soc-header">THREAT ACTIVITY</div>', unsafe_allow_html=True)
+            st.markdown('<div class="soc-sub">Traffic throughput over time</div>', unsafe_allow_html=True)
             metrics_history = db.get_metrics_timeseries(limit=60)
             if metrics_history:
                 df_metrics = pd.DataFrame(metrics_history)
@@ -633,13 +427,13 @@ with tab_monitor:
                     df_metrics,
                     x="timestamp",
                     y=["flows_per_sec", "packets_per_sec"],
-                    labels={"value": "Events / sec", "timestamp": "Timestamp", "variable": "Rate"},
+                    labels={"value": "Events / sec", "timestamp": "Time", "variable": "Metric"},
                     template="plotly_dark",
-                    color_discrete_map={"flows_per_sec": "#06B6D4", "packets_per_sec": "#F97316"}
+                    color_discrete_map={"flows_per_sec": "#0284C7", "packets_per_sec": "#F59E0B"}
                 )
                 fig_traffic.update_layout(
-                    margin=dict(l=10, r=10, t=15, b=10),
-                    height=280,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    height=230,
                     paper_bgcolor="#0F172A",
                     plot_bgcolor="#0F172A",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -649,8 +443,8 @@ with tab_monitor:
                 st.info("Awaiting traffic stream to plot throughput metrics...")
 
         with chart_col2:
-            st.markdown('<div class="soc-section-title">Threat Distribution</div>', unsafe_allow_html=True)
-            st.markdown('<div class="soc-section-sub">Detected threat breakdown across active classes</div>', unsafe_allow_html=True)
+            st.markdown('<div class="soc-header">THREAT DISTRIBUTION</div>', unsafe_allow_html=True)
+            st.markdown('<div class="soc-sub">Detected threat breakdown</div>', unsafe_allow_html=True)
             threat_counts = db.get_alert_counts_by_threat()
             if threat_counts:
                 df_threats = pd.DataFrame(list(threat_counts.items()), columns=["Threat Class", "Alert Count"])
@@ -658,13 +452,13 @@ with tab_monitor:
                     df_threats,
                     names="Threat Class",
                     values="Alert Count",
-                    hole=0.45,
+                    hole=0.50,
                     template="plotly_dark",
                     color_discrete_sequence=px.colors.qualitative.Prism
                 )
                 fig_dist.update_layout(
-                    margin=dict(l=10, r=10, t=15, b=10),
-                    height=280,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    height=230,
                     paper_bgcolor="#0F172A",
                     legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.0)
                 )
@@ -672,38 +466,32 @@ with tab_monitor:
             else:
                 st.info("No threats detected in the current observation window.")
 
-        st.markdown("---")
-
-        # Recent Alerts Table (Strictly Unidirectional Flow Indication)
-        st.markdown('<div class="soc-section-title">Recent Threat Alerts</div>', unsafe_allow_html=True)
-        st.markdown('<div class="soc-section-sub">Structured security events emitted from the passive pipeline</div>', unsafe_allow_html=True)
+        st.markdown('<div class="soc-header" style="margin-top: 14px;">RECENT ALERTS</div>', unsafe_allow_html=True)
+        st.markdown('<div class="soc-sub">Recent alerts</div>', unsafe_allow_html=True)
 
         f_sev = None if severity_filter == "ALL" else severity_filter
         f_threat = None if class_filter == "ALL" else class_filter
         recent_alerts = db.get_recent_alerts(limit=50, severity=f_sev, threat_class=f_threat)
 
         if recent_alerts:
+            # Streamlined 5-column Table
             table_data = []
             for a in recent_alerts:
-                subtype = a["evidence"].get("subtype", a["evidence"].get("threat_subtype", "-"))
+                t_str = a["timestamp"]
+                time_disp = t_str[11:19] if len(t_str) >= 19 else t_str
                 table_data.append({
-                    "ID": a["id"],
-                    "Timestamp": a["timestamp"][:19].replace("T", " "),
-                    "Threat Class": a["threat_class"],
-                    "Subtype": subtype,
+                    "Time": time_disp,
+                    "Threat": a["threat_class"],
                     "Severity": a["severity"],
                     "Confidence": f"{float(a['confidence']) * 100:.1f}%",
-                    "Input Source": a.get("input_source", "pcap_replay"),
-                    "Observed Flow (Unidirectional)": f"{a['src_ip']}:{a['src_port']} → {a['dst_ip']}:{a['dst_port']}",
-                    "Protocol": a["protocol"],
-                    "Detector": a["detector"],
+                    "Flow": f"{a['src_ip']}:{a['src_port']} → {a['dst_ip']}:{a['dst_port']}",
                 })
             df_alerts = pd.DataFrame(table_data)
             st.dataframe(df_alerts, use_container_width=True, hide_index=True)
 
-            # Alert Drill-Down & Evidence Inspector
-            st.markdown('<div class="soc-section-title" style="margin-top: 18px;">Alert Drill-Down & Evidence Inspector</div>', unsafe_allow_html=True)
-            st.markdown('<div class="soc-section-sub">Inspect forensic features and explainable evidence dictionary for any alert</div>', unsafe_allow_html=True)
+            # Alert Detail / Evidence Inspector
+            st.markdown('<div class="soc-header" style="margin-top: 18px;">ALERT EVIDENCE INSPECTOR</div>', unsafe_allow_html=True)
+            st.markdown('<div class="soc-sub">Forensic metadata and statistical indicators</div>', unsafe_allow_html=True)
 
             alert_lookup = {a["id"]: a for a in recent_alerts}
             alert_ids = list(alert_lookup.keys())
@@ -715,97 +503,103 @@ with tab_monitor:
                 sub_label = f" [{sub}]" if sub and sub != "-" else ""
                 conf = float(item.get("confidence", 0.0)) * 100
                 sev = item.get("severity", "INFO")
-                return f"#{alert_id} | [{sev}] {tc}{sub_label} ({conf:.1f}% conf)"
+                return f"#{alert_id} | [{sev}] {tc}{sub_label} ({conf:.1f}%)"
 
             selected_id = st.selectbox(
-                "Select Alert to Inspect:",
+                "Select Alert:",
                 alert_ids,
                 format_func=format_alert_label
             )
 
             selected_alert = alert_lookup.get(selected_id)
             if selected_alert:
-                col_det1, col_det2 = st.columns([1, 2])
+                col_det1, col_det2 = st.columns([1, 1])
                 alert_ev = selected_alert.get("evidence", {})
                 alert_sub = alert_ev.get("subtype", alert_ev.get("threat_subtype", "STANDARD"))
+
+                # Left Column: Classification & Flow Context
                 with col_det1:
-                    st.markdown("""
-                    <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-                        <div style="font-size: 0.72rem; color: #94A3B8; font-weight: 700; text-transform: uppercase;">Threat Classification</div>
-                        <div style="font-size: 1.15rem; font-weight: 800; color: #38BDF8; margin-top: 2px;">""" + str(selected_alert["threat_class"]) + """</div>
-                        <div style="margin-top: 4px;">
-                            <span style="background: #1E293B; color: #38BDF8; border: 1px solid #0284C7; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">SUBTYPE: """ + str(alert_sub) + """</span>
+                    st.markdown(f"""
+                    <div class="detail-card">
+                        <div style="font-size: 0.70rem; color: #94A3B8; font-weight: 700; text-transform: uppercase;">Threat Classification</div>
+                        <div style="font-size: 1.15rem; font-weight: 800; color: #38BDF8; margin: 2px 0 6px 0;">{selected_alert['threat_class']}</div>
+                        <div style="margin-bottom: 10px;">
+                            <span style="background: #1E293B; color: #CBD5E1; border: 1px solid #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.70rem; font-weight: 600;">SUBTYPE: {alert_sub}</span>
                         </div>
-                        <hr style="border: 0; border-top: 1px solid #1E293B; margin: 10px 0;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.82rem;">
-                            <div><span style="color: #64748B;">Severity:</span> <strong>""" + str(selected_alert["severity"]) + """</strong></div>
-                            <div><span style="color: #64748B;">Confidence:</span> <strong>""" + f"{float(selected_alert['confidence']) * 100:.1f}%" + """</strong></div>
-                            <div><span style="color: #64748B;">Protocol:</span> <strong>""" + str(selected_alert["protocol"]) + """</strong></div>
-                            <div><span style="color: #64748B;">Direction:</span> <strong>Ingress (1-Way)</strong></div>
-                        </div>
-                        <div style="font-size: 0.78rem; color: #CBD5E1; margin-top: 8px;">
-                            <span style="color: #64748B;">Flow:</span> <code>""" + f"{selected_alert['src_ip']}:{selected_alert['src_port']} → {selected_alert['dst_ip']}:{selected_alert['dst_port']}" + """</code>
-                        </div>
-                        <hr style="border: 0; border-top: 1px solid #1E293B; margin: 10px 0;">
-                        <div style="font-size: 0.78rem; color: #94A3B8;">Input Source: <code>""" + str(selected_alert.get("input_source", "pcap_replay")) + """</code></div>
-                        <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 2px;">Detector: <code>""" + str(selected_alert["detector"]) + """</code></div>
-                        <div style="font-size: 0.75rem; color: #64748B; margin-top: 4px;">Timestamp: """ + str(selected_alert["timestamp"]) + """</div>
+                        <div class="detail-row"><span class="detail-key">Severity</span><span class="detail-val">{selected_alert['severity']}</span></div>
+                        <div class="detail-row"><span class="detail-key">Confidence</span><span class="detail-val">{float(selected_alert['confidence']) * 100:.1f}%</span></div>
+                        <div class="detail-row"><span class="detail-key">Protocol</span><span class="detail-val">{selected_alert['protocol']}</span></div>
+                        <div class="detail-row"><span class="detail-key">Direction</span><span class="detail-val">Ingress (1-Way)</span></div>
+                        <div class="detail-row"><span class="detail-key">Flow</span><span class="detail-val"><code>{selected_alert['src_ip']}:{selected_alert['src_port']} → {selected_alert['dst_ip']}:{selected_alert['dst_port']}</code></span></div>
+                        <div class="detail-row"><span class="detail-key">Input Source</span><span class="detail-val"><code>{selected_alert.get('input_source', 'pcap_replay')}</code></span></div>
+                        <div class="detail-row"><span class="detail-key">Detector</span><span class="detail-val"><code>{selected_alert['detector']}</code></span></div>
+                        <div class="detail-row"><span class="detail-key">Timestamp</span><span class="detail-val">{selected_alert['timestamp']}</span></div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                # Right Column: Formatted Evidence & Collapsible Raw JSON
                 with col_det2:
+                    st.markdown("""
+                    <div class="detail-card">
+                        <div style="font-size: 0.70rem; color: #94A3B8; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Forensic Evidence Summary</div>
+                    """, unsafe_allow_html=True)
+
                     if alert_sub == "SLOW_AND_LOW":
-                        st.markdown("""
-                        <div style="background: #0B132B; border: 1px solid #1C2541; border-left: 4px solid #38BDF8; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px;">
-                            <div style="font-size: 0.78rem; font-weight: 700; color: #38BDF8; text-transform: uppercase; margin-bottom: 4px;">Stateful Slow-and-Low Temporal Profile</div>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.80rem;">
-                                <div><span style="color: #94A3B8;">Window:</span> <strong>""" + str(alert_ev.get("window_seconds", "-")) + """s</strong> (Transfers: <strong>""" + str(alert_ev.get("transfer_count", "-")) + """</strong>)</div>
-                                <div><span style="color: #94A3B8;">Cumulative Out:</span> <strong>""" + f"{int(alert_ev.get('cumulative_outbound_bytes', 0)):,}" + """ B</strong></div>
-                                <div><span style="color: #94A3B8;">Out/In Ratio:</span> <strong>""" + str(alert_ev.get("outbound_inbound_ratio", "-")) + """x</strong></div>
-                                <div><span style="color: #94A3B8;">Destination Persistence:</span> <strong>""" + f"{float(alert_ev.get('destination_persistence', 0.0))*100:.0f}%" + """</strong></div>
-                                <div><span style="color: #94A3B8;">Mean IAT:</span> <strong>""" + f"{float(alert_ev.get('mean_interarrival_seconds', 0.0)):.1f}s" + """</strong> (CV: <strong>""" + f"{float(alert_ev.get('iat_cv', 0.0)):.2f}" + """</strong>)</div>
-                                <div><span style="color: #94A3B8;">Slow-Low Score:</span> <strong>""" + str(alert_ev.get("slow_exfiltration_score", "-")) + """</strong></div>
-                            </div>
-                        </div>
+                        st.markdown(f"""
+                        <div class="detail-row"><span class="detail-key">Transfer Count</span><span class="detail-val">{alert_ev.get('transfer_count', alert_ev.get('total_transfers_in_window', '-'))}</span></div>
+                        <div class="detail-row"><span class="detail-key">Cumulative Outbound</span><span class="detail-val">{int(alert_ev.get('cumulative_outbound_bytes', 0)):,} B</span></div>
+                        <div class="detail-row"><span class="detail-key">Cumulative Inbound</span><span class="detail-val">{int(alert_ev.get('cumulative_inbound_bytes', alert_ev.get('cumulative_bytes_in', 0))):,} B</span></div>
+                        <div class="detail-row"><span class="detail-key">Out/In Ratio</span><span class="detail-val">{alert_ev.get('outbound_inbound_ratio', alert_ev.get('cumulative_asymmetric_ratio', '-'))}x</span></div>
+                        <div class="detail-row"><span class="detail-key">Destination Persistence</span><span class="detail-val">{float(alert_ev.get('destination_persistence', alert_ev.get('destination_persistence_ratio', 0.0))) * 100:.0f}%</span></div>
+                        <div class="detail-row"><span class="detail-key">Mean IAT</span><span class="detail-val">{float(alert_ev.get('mean_interarrival_seconds', alert_ev.get('mean_iat_sec', 0.0))):.1f}s</span></div>
+                        <div class="detail-row"><span class="detail-key">IAT CV</span><span class="detail-val">{float(alert_ev.get('iat_cv', 0.0)):.2f}</span></div>
+                        <div class="detail-row"><span class="detail-key">Slow-Low Score</span><span class="detail-val">{alert_ev.get('slow_exfiltration_score', '-')}</span></div>
                         """, unsafe_allow_html=True)
-                    st.markdown("**Structured Evidence Dictionary:**")
-                    st.json(selected_alert["evidence"])
+                    else:
+                        diag = alert_ev.get("threat_diagnosis", alert_ev.get("reason", "Anomalous traffic characteristics observed."))
+                        st.markdown(f'<div style="color: #CBD5E1; font-size: 0.78rem; margin-bottom: 8px; line-height: 1.4;">{diag}</div>', unsafe_allow_html=True)
+                        for k, v in list(alert_ev.items())[:6]:
+                            if k not in ["threat_diagnosis", "reason", "subtype", "threat_subtype"]:
+                                v_disp = f"{v:.4f}" if isinstance(v, float) else str(v)
+                                k_disp = k.replace("_", " ").title()
+                                st.markdown(f'<div class="detail-row"><span class="detail-key">{k_disp}</span><span class="detail-val">{v_disp}</span></div>', unsafe_allow_html=True)
+
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                    with st.expander("Raw Evidence", expanded=False):
+                        st.json(selected_alert["evidence"])
         else:
             st.info("No alerts match the selected criteria in the active observation window.")
 
-        # Encrypted Traffic Detection Architecture Callout (Requirement 5)
-        st.markdown("""
-        <div class="encrypted-flow-card">
-            <div style="font-size: 0.85rem; font-weight: 700; color: #38BDF8; margin-bottom: 8px;">
-                🔒 Encrypted Traffic Threat Detection Pipeline (Observable Metadata Only)
+        # Encrypted Traffic Architecture Note
+        with st.expander("How Encrypted Traffic Is Analyzed (Metadata Only)", expanded=False):
+            st.markdown("""
+            <div style="font-size: 0.78rem; color: #94A3B8; line-height: 1.5;">
+                <strong style="color: #E2E8F0;">Zero Payload Decryption Guarantee:</strong><br>
+                AEGIS analyzes encrypted traffic (TLS 1.3 and QUIC over UDP 443) strictly via observable metadata:
+                <ul style="margin: 6px 0 0 16px;">
+                    <li>JA3 and JA4 fingerprint hashes extracted from unencrypted ClientHello handshakes</li>
+                    <li>Sequence of Packet Lengths and Times (SPLT) and inter-arrival variances</li>
+                    <li>RFC 9000 unencrypted QUIC header flags (Long vs. Short headers, CID lengths)</li>
+                    <li>Upload/download byte directional asymmetries</li>
+                </ul>
+                Zero private keys, decryption certificates, or payload inspection are required or utilized.
             </div>
-            <div class="pipeline-breadcrumb">
-                <span class="crumb">Encrypted Traffic</span>
-                <span class="crumb-arrow">→</span>
-                <span class="crumb">Observable Metadata</span>
-                <span class="crumb-arrow">→</span>
-                <span class="crumb">JA3/JA4 + SPLT + Packet Timing</span>
-                <span class="crumb-arrow">→</span>
-                <span class="crumb-highlight">Suspicious Encrypted Threat Detection</span>
-            </div>
-            <div style="font-size: 0.76rem; color: #94A3B8; margin-top: 8px; line-height: 1.4;">
-                <strong style="color: #E2E8F0;">Zero Payload Decryption Guarantee:</strong> AEGIS extracts TLS ClientHello handshakes, cipher suite offerings, SNI, sequence of packet lengths and times (SPLT), and inter-arrival intervals without private keys, decryption certs, or application-layer parsing.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
         if not passive_polling:
-            if st.button("🔄 Check Updates Now"):
+            if st.button("Check Updates Now"):
                 st.rerun(scope="fragment")
 
     render_live_threat_feed(sev_filter, threat_filter)
 
 
 # ==============================================================================
-# TAB 2: MEASURED BENCHMARKS & TELEMETRY
+# TAB 2: BENCHMARKS
 # ==============================================================================
 with tab_benchmark:
-    st.markdown('<div class="soc-section-title">Empirical Throughput & Latency Benchmarks</div>', unsafe_allow_html=True)
-    st.markdown('<div class="soc-section-sub">Actual measured throughput, latency percentiles (P50/P95/P99), and resource consumption on this host</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-header">BENCHMARKS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-sub">Measured performance on this host (PCAP replay & synthetic streams)</div>', unsafe_allow_html=True)
 
     benchmark_file = Path("data/benchmark_results.json")
     bench_data = None
@@ -822,53 +616,52 @@ with tab_benchmark:
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(ts_val))
 
         st.markdown(f"""
-        <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.8rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-            <div><span style="color: #64748B;">Platform Host:</span> <strong style="color: #E2E8F0;">{plat.get('system', 'Unknown')} {plat.get('release', '')} ({plat.get('machine', '')})</strong></div>
-            <div><span style="color: #64748B;">Python Runtime:</span> <strong style="color: #38BDF8;">v{plat.get('python_version', sys.version.split()[0])}</strong></div>
-            <div><span style="color: #64748B;">CPU Cores:</span> <strong style="color: #10B981;">{plat.get('cpu_count', 'N/A')} logical cores</strong></div>
-            <div><span style="color: #64748B;">Target PCAP:</span> <strong style="color: #CBD5E1;">{bench_data.get('pcap_source', 'data/sample/demo.pcap')}</strong></div>
-            <div><span style="color: #64748B;">Last Measured:</span> <strong style="color: #FBBF24;">{ts_str}</strong></div>
+        <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 6px; padding: 8px 14px; margin-bottom: 14px; font-size: 0.76rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div><span style="color: #64748B;">Platform:</span> <strong style="color: #E2E8F0;">{plat.get('system', '')} {plat.get('release', '')} ({plat.get('machine', '')})</strong></div>
+            <div><span style="color: #64748B;">Python:</span> <strong style="color: #38BDF8;">v{plat.get('python_version', '')}</strong></div>
+            <div><span style="color: #64748B;">CPU:</span> <strong style="color: #10B981;">{plat.get('cpu_count', 'N/A')} cores</strong></div>
+            <div><span style="color: #64748B;">PCAP:</span> <strong style="color: #CBD5E1;">{bench_data.get('pcap_source', 'data/sample/demo.pcap')}</strong></div>
+            <div><span style="color: #64748B;">Measured:</span> <strong style="color: #FBBF24;">{ts_str}</strong></div>
         </div>
         """, unsafe_allow_html=True)
 
         runs = bench_data["runs"]
         latest_run = runs[-1]
 
-        # Metric Cards for latest run
+        # Compact 5-metric Grid
         st.markdown(f"""
-        <div class="metric-grid">
+        <div class="metric-grid-5">
             <div class="metric-card">
-                <div class="metric-label">INGESTION RATE</div>
-                <div class="metric-value">{latest_run['packets_per_sec']:,.1f} <span class="metric-unit">pkts/s</span></div>
-                <div class="metric-sub">{latest_run['total_packets']:,} pkts in {latest_run['duration_sec']}s</div>
+                <div class="metric-label">PACKETS / SEC</div>
+                <div class="metric-value">{latest_run['packets_per_sec']:,.1f}</div>
+                <div class="metric-sub">{latest_run['total_packets']:,} pkts ({latest_run['duration_sec']}s)</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">FLOW EVALUATION</div>
-                <div class="metric-value">{latest_run['flows_per_sec']:,.1f} <span class="metric-unit">flows/s</span></div>
-                <div class="metric-sub">{latest_run['total_flows']:,} flows evaluated</div>
+                <div class="metric-label">FLOWS / SEC</div>
+                <div class="metric-value">{latest_run['flows_per_sec']:,.1f}</div>
+                <div class="metric-sub">{latest_run['total_flows']:,} flows</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">LATENCY P50 (MEDIAN)</div>
-                <div class="metric-value">{latest_run['latency_p50_ms']:.2f} <span class="metric-unit">ms</span></div>
+                <div class="metric-label">P50 (MEDIAN)</div>
+                <div class="metric-value">{latest_run['latency_p50_ms']:.2f} <span style="font-size: 0.75rem; color: #64748B;">ms</span></div>
                 <div class="metric-sub">Mean: {latest_run['latency_mean_ms']:.2f} ms</div>
             </div>
             <div class="metric-card metric-card-high">
-                <div class="metric-label">LATENCY P95</div>
-                <div class="metric-value">{latest_run['latency_p95_ms']:.2f} <span class="metric-unit">ms</span></div>
+                <div class="metric-label">P95 LATENCY</div>
+                <div class="metric-value">{latest_run['latency_p95_ms']:.2f} <span style="font-size: 0.75rem; color: #64748B;">ms</span></div>
                 <div class="metric-sub">P99: {latest_run['latency_p99_ms']:.2f} ms</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">MEMORY UTILIZATION</div>
-                <div class="metric-value">{latest_run['peak_memory_mb']:.1f} <span class="metric-unit">MB</span></div>
+                <div class="metric-label">PEAK MEMORY</div>
+                <div class="metric-value">{latest_run['peak_memory_mb']:.1f} <span style="font-size: 0.75rem; color: #64748B;">MB</span></div>
                 <div class="metric-sub">CPU: {latest_run['cpu_percent']:.1f}%</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Multi-speed sweep charts if available
+        # Rate sweep charts
         if len(runs) > 1:
             df_runs = pd.DataFrame(runs)
-            st.markdown("#### Replay Rate Sweep Telemetry")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 fig_pps = px.bar(
@@ -881,44 +674,44 @@ with tab_benchmark:
                     template="plotly_dark",
                     color_discrete_sequence=["#0284C7"]
                 )
-                fig_pps.update_layout(height=280, paper_bgcolor="#0F172A", plot_bgcolor="#0F172A", margin=dict(l=10, r=10, t=35, b=10))
+                fig_pps.update_layout(height=240, paper_bgcolor="#0F172A", plot_bgcolor="#0F172A", margin=dict(l=10, r=10, t=30, b=10))
                 st.plotly_chart(fig_pps, use_container_width=True)
 
             with col_b2:
                 fig_lat = go.Figure()
-                fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p50_ms"], mode="lines+markers", name="P50 (Median)", line=dict(color="#10B981", width=2)))
+                fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p50_ms"], mode="lines+markers", name="P50", line=dict(color="#10B981", width=2)))
                 fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p95_ms"], mode="lines+markers", name="P95", line=dict(color="#FBBF24", width=2)))
                 fig_lat.add_trace(go.Scatter(x=df_runs["speed_setting"], y=df_runs["latency_p99_ms"], mode="lines+markers", name="P99", line=dict(color="#F87171", width=2, dash="dot")))
                 fig_lat.update_layout(
-                    title="Detection Latency Percentiles vs Replay Rate",
+                    title="Latency Percentiles (ms / flow)",
                     xaxis_title="Replay Rate",
-                    yaxis_title="Latency (ms / flow)",
+                    yaxis_title="Latency (ms)",
                     template="plotly_dark",
-                    height=280,
+                    height=240,
                     paper_bgcolor="#0F172A",
                     plot_bgcolor="#0F172A",
-                    margin=dict(l=10, r=10, t=35, b=10),
+                    margin=dict(l=10, r=10, t=30, b=10),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 st.plotly_chart(fig_lat, use_container_width=True)
 
-            st.markdown("#### Sweep Summary Matrix")
             display_cols = ["speed_setting", "packets_per_sec", "flows_per_sec", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms", "latency_max_ms", "peak_memory_mb", "cpu_percent"]
             df_disp = df_runs[display_cols].rename(columns={
                 "speed_setting": "Replay Rate",
-                "packets_per_sec": "Packets/sec",
-                "flows_per_sec": "Flows/sec",
-                "latency_p50_ms": "P50 Latency (ms)",
-                "latency_p95_ms": "P95 Latency (ms)",
-                "latency_p99_ms": "P99 Latency (ms)",
-                "latency_max_ms": "Max Latency (ms)",
+                "packets_per_sec": "Packets/s",
+                "flows_per_sec": "Flows/s",
+                "latency_p50_ms": "P50 (ms)",
+                "latency_p95_ms": "P95 (ms)",
+                "latency_p99_ms": "P99 (ms)",
+                "latency_max_ms": "Max (ms)",
                 "peak_memory_mb": "Peak RSS (MB)",
                 "cpu_percent": "CPU (%)",
             })
         st.dataframe(df_disp, use_container_width=True, hide_index=True)
     else:
-        st.info("No saved benchmark results found. Run a live benchmark below to populate empirical host metrics.")
+        st.info("No saved benchmark results found. Run a benchmark below to populate host metrics.")
 
+<<<<<<< Updated upstream
     # ==============================================================================
     # BEACON ADVERSARIAL ROBUSTNESS & RED-TEAM VALIDATION PANEL (AEGIS v2.2)
     # ==============================================================================
@@ -1012,78 +805,76 @@ with tab_benchmark:
     else:
         st.info("Run `python -m training.adversarial_beacon_benchmark` to populate adversarial beacon robustness telemetry.")
 
-    st.markdown("---")
-    st.markdown("#### Execute Live Host Benchmark")
-    col_run1, col_run2, col_run3 = st.columns([2, 1, 1])
-    with col_run1:
-        bench_src = st.selectbox("Target Stream:", ["PCAP Replay (data/sample/demo.pcap)", "In-Memory Synthetic Stream"])
-    with col_run2:
-        bench_dur = st.slider("Duration per Rate (s)", min_value=2, max_value=10, value=3)
-    with col_run3:
-        bench_mode = st.radio("Benchmark Mode", ["Single Unthrottled", "Multi-Speed Sweep (1x-max)"])
+    with st.expander("Execute Live Host Benchmark", expanded=False):
+        col_run1, col_run2, col_run3 = st.columns([2, 1, 1])
+        with col_run1:
+            bench_src = st.selectbox("Target Stream:", ["PCAP Replay (data/sample/demo.pcap)", "In-Memory Synthetic Stream"])
+        with col_run2:
+            bench_dur = st.slider("Duration per Rate (s)", min_value=2, max_value=10, value=3)
+        with col_run3:
+            bench_mode = st.radio("Benchmark Mode", ["Single Unthrottled", "Multi-Speed Sweep (1x-max)"])
 
-    if st.button("⚡ Run Live Host Benchmark", use_container_width=True):
-        from app.benchmark import run_single_benchmark, run_sweep_benchmark
-        with st.spinner("Running real benchmark on host..."):
-            use_syn = ("Synthetic" in bench_src)
-            pcap_arg = "data/sample/demo.pcap" if not use_syn else None
-            if "Sweep" in bench_mode:
-                run_sweep_benchmark(
-                    pcap_path="data/sample/demo.pcap",
-                    duration_per_speed=float(bench_dur),
-                    output_json="data/benchmark_results.json"
-                )
-            else:
-                res = run_single_benchmark(
-                    pcap_path=pcap_arg,
-                    speed=0.0,
-                    duration=float(bench_dur),
-                    use_synthetic=use_syn,
-                )
-                with open("data/benchmark_results.json", "w") as f:
-                    import platform as pl
-                    import psutil as pu
-                    json.dump({
-                        "platform": {
-                            "system": pl.system(),
-                            "release": pl.release(),
-                            "machine": pl.machine(),
-                            "python_version": pl.python_version(),
-                            "cpu_count": pu.cpu_count(logical=True),
-                        },
-                        "pcap_source": bench_src,
-                        "timestamp": time.time(),
-                        "runs": [res]
-                    }, f, indent=2)
-        st.success("Benchmark completed! Telemetry metrics updated.")
-        st.rerun()
+        if st.button("⚡ Run Live Host Benchmark", use_container_width=True):
+            from app.benchmark import run_single_benchmark, run_sweep_benchmark
+            with st.spinner("Running real benchmark on host..."):
+                use_syn = ("Synthetic" in bench_src)
+                pcap_arg = "data/sample/demo.pcap" if not use_syn else None
+                if "Sweep" in bench_mode:
+                    run_sweep_benchmark(
+                        pcap_path="data/sample/demo.pcap",
+                        duration_per_speed=float(bench_dur),
+                        output_json="data/benchmark_results.json"
+                    )
+                else:
+                    res = run_single_benchmark(
+                        pcap_path=pcap_arg,
+                        speed=0.0,
+                        duration=float(bench_dur),
+                        use_synthetic=use_syn,
+                    )
+                    with open("data/benchmark_results.json", "w") as f:
+                        import platform as pl
+                        import psutil as pu
+                        json.dump({
+                            "platform": {
+                                "system": pl.system(),
+                                "release": pl.release(),
+                                "machine": pl.machine(),
+                                "python_version": pl.python_version(),
+                                "cpu_count": pu.cpu_count(logical=True),
+                            },
+                            "pcap_source": bench_src,
+                            "timestamp": time.time(),
+                            "runs": [res]
+                        }, f, indent=2)
+            st.success("Benchmark completed! Telemetry metrics updated.")
+            st.rerun()
 
 
 # ==============================================================================
 # TAB 3: THREAT ANALYSIS SANDBOX
 # ==============================================================================
 with tab_sandbox:
-    st.markdown('<div class="soc-section-title">Threat Analysis Sandbox</div>', unsafe_allow_html=True)
-    st.markdown('<div class="soc-section-sub">Test AEGIS detection using PCAP files, DNS samples, and simulated network flows.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-header">THREAT ANALYSIS SANDBOX</div>', unsafe_allow_html=True)
+    st.markdown('<div class="soc-sub">Local in-memory evaluation · No network packets transmitted · Zero active probing</div>', unsafe_allow_html=True)
 
-    sandbox_subtabs = st.tabs(["📁 Upload & Replay PCAP", "🌐 DGA & DNS Inspector", "⚡ Manual Flow Simulator"])
+    sandbox_subtabs = st.tabs(["PCAP Analysis", "DNS Analysis", "Flow Simulation"])
 
-    # --- SUBTAB 1: UPLOAD PCAP ---
+    # --- SUBTAB 1: PCAP ANALYSIS ---
     with sandbox_subtabs[0]:
-        st.markdown("#### Upload & Replay PCAP")
-        st.markdown("Upload a PCAP or PCAPNG capture. AEGIS processes the traffic in read-only mode, assembles flows, extracts passive features, and runs threat detection.")
-
-        uploaded_pcap = st.file_uploader("Select PCAP file to analyze", type=["pcap", "pcapng"])
+        uploaded_pcap = st.file_uploader("Upload PCAP capture for offline evaluation", type=["pcap", "pcapng"])
         replay_speed = st.select_slider(
-            "Replay Speed Multiplier",
+            "Replay Speed",
             options=[0.0, 1.0, 2.0, 5.0, 10.0],
             value=0.0,
             format_func=lambda x: "Maximum Throughput (Fast)" if x == 0.0 else f"{x}x Real-time"
         )
-        reset_db_option = st.checkbox("Clear existing database before analyzing", value=False)
+
+        with st.expander("Advanced Options", expanded=False):
+            reset_db_option = st.checkbox("Clear existing database before analyzing", value=False)
 
         if uploaded_pcap is not None:
-            if st.button("🚀 Analyze Uploaded PCAP"):
+            if st.button("Analyze PCAP", type="primary"):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pcap") as tmp_file:
                     tmp_file.write(uploaded_pcap.read())
                     tmp_pcap_path = tmp_file.name
@@ -1091,7 +882,7 @@ with tab_sandbox:
                 if reset_db_option:
                     db.clear_data()
 
-                with st.spinner("Processing packets through AEGIS passive unidirectional pipeline..."):
+                with st.spinner("Processing through passive unidirectional pipeline..."):
                     engine = PCAPReplayEngine(
                         pcap_path=tmp_pcap_path,
                         speed=replay_speed,
@@ -1101,15 +892,12 @@ with tab_sandbox:
                     engine.run()
                     elapsed = max(0.001, time.time() - t0)
 
-                st.success(f"Analysis Complete in {elapsed:.2f}s! Processed {engine.total_packets} packets, evaluated {engine.total_flows_processed} flows, generated {engine.total_alerts_emitted} alerts.")
+                st.success(f"Complete ({elapsed:.2f}s): {engine.total_packets} packets, {engine.total_flows_processed} flows, {engine.total_alerts_emitted} alerts.")
                 Path(tmp_pcap_path).unlink(missing_ok=True)
                 st.rerun()
 
-    # --- SUBTAB 2: DGA DOMAIN TESTER ---
+    # --- SUBTAB 2: DNS ANALYSIS ---
     with sandbox_subtabs[1]:
-        st.markdown("#### DGA & DNS Inspector")
-        st.markdown("Analyze domain names with the trained Random Forest lexical classifier to identify algorithmic C2 rendezvous domains (Local feature extraction only).")
-
         sample_domains = [
             "x7k29a8d91b4mz09.biz",
             "q81m2k9x7a11v.net",
@@ -1120,12 +908,12 @@ with tab_sandbox:
         ]
         col_inp, col_quick = st.columns([2, 1])
         with col_quick:
-            quick_pick = st.selectbox("Quick Samples:", ["(Custom)"] + sample_domains)
+            quick_pick = st.selectbox("Sample Domains:", ["(Custom)"] + sample_domains)
         with col_inp:
             default_val = quick_pick if quick_pick != "(Custom)" else "x7k29a8d91b4mz09.biz"
-            test_domain = st.text_input("Domain to inspect:", value=default_val)
+            test_domain = st.text_input("Domain:", value=default_val)
 
-        if st.button("🔍 Evaluate Domain"):
+        if st.button("Evaluate Domain"):
             lex = DNSFeatureExtractor.extract_lexical_features(test_domain)
             dga_det = DGADetector()
             fake_flow = {
@@ -1140,30 +928,22 @@ with tab_sandbox:
             res = dga_det.predict(fake_flow)
 
             mcol1, mcol2, mcol3, mcol4 = st.columns(4)
-            mcol1.metric("Shannon Entropy", f"{lex['entropy']:.3f} bits")
-            mcol2.metric("Domain Length", f"{lex['length']} chars")
-            mcol3.metric("Digit Ratio", f"{lex['digit_ratio']*100:.1f}%")
-            mcol4.metric("Vowel Ratio", f"{lex['vowel_ratio']*100:.1f}%")
+            mcol1.metric("Entropy", f"{lex['entropy']:.3f}")
+            mcol2.metric("Length", f"{lex['length']}")
+            mcol3.metric("Digit %", f"{lex['digit_ratio']*100:.1f}%")
+            mcol4.metric("Vowel %", f"{lex['vowel_ratio']*100:.1f}%")
 
             if res:
-                st.error(f"🚨 **VERDICT: THREAT DETECTED** — `{res.threat_class}`")
-                st.markdown(f"**Confidence:** `{res.confidence * 100:.1f}%` | **Severity:** `{res.severity.value}`")
-                st.json(res.evidence)
+                st.error(f"Threat Detected: {res.threat_class} (Confidence: {res.confidence * 100:.1f}%, Severity: {res.severity.value})")
+                with st.expander("Evidence", expanded=True):
+                    st.json(res.evidence)
             else:
-                st.success("✅ **VERDICT: BENIGN DOMAIN** — Shannon entropy and character distributions match legitimate naming conventions.")
+                st.success("Benign Domain: Lexical structure matches legitimate naming conventions.")
 
-    # --- SUBTAB 3: MANUAL FLOW SIMULATOR ---
+    # --- SUBTAB 3: FLOW SIMULATION ---
     with sandbox_subtabs[2]:
-        st.markdown("#### Simulate Flow Records for Detector Testing")
-        st.markdown("""
-        <div class="sandbox-notice-badge">
-            🛡️ Local in-memory evaluation only &bull; No network packets transmitted &bull; Zero active probing
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("Construct synthetic flow telemetry to evaluate feature extraction and detector fusion without touching any network interface.")
-
         preset = st.selectbox(
-            "Select Scenario Preset:",
+            "Scenario Preset:",
             [
                 "Custom",
                 "SYN Flood Attack (High SYN rate, 0 ACKs)",
@@ -1197,16 +977,16 @@ with tab_sandbox:
 
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
-            in_syn = st.number_input("SYN Flags Count", min_value=0, max_value=5000, value=f_syn)
-            in_ack = st.number_input("ACK Flags Count", min_value=0, max_value=5000, value=f_ack)
+            in_syn = st.number_input("SYN Flags", min_value=0, max_value=5000, value=f_syn)
+            in_ack = st.number_input("ACK Flags", min_value=0, max_value=5000, value=f_ack)
         with col_f2:
-            in_fwd = st.number_input("Outbound Forward Bytes", min_value=0, max_value=100_000_000, value=f_fwd_bytes)
-            in_bwd = st.number_input("Inbound Backward Bytes", min_value=0, max_value=100_000_000, value=f_bwd_bytes)
+            in_fwd = st.number_input("Outbound Bytes", min_value=0, max_value=100_000_000, value=f_fwd_bytes)
+            in_bwd = st.number_input("Inbound Bytes", min_value=0, max_value=100_000_000, value=f_bwd_bytes)
         with col_f3:
-            in_dur = st.number_input("Flow Duration (sec)", min_value=0.01, max_value=1000.0, value=f_duration)
-            in_port = st.number_input("Destination Port", min_value=1, max_value=65535, value=f_dst_port)
+            in_dur = st.number_input("Duration (s)", min_value=0.01, max_value=1000.0, value=f_duration)
+            in_port = st.number_input("Port", min_value=1, max_value=65535, value=f_dst_port)
 
-        if st.button("⚡ Evaluate Flow in Memory"):
+        if st.button("Evaluate Flow in Memory"):
             raw_flow = {
                 "flow_id": f"{f_proto}:10.0.0.99:50000->198.51.100.1:{in_port}",
                 "src_ip": "10.0.0.99",
@@ -1230,8 +1010,8 @@ with tab_sandbox:
 
             if alerts:
                 for alt in alerts:
-                    st.error(f"🚨 **ALERT EMITTED**: `{alt.threat_class}` | Severity: `{alt.severity.value}` | Confidence: `{alt.confidence * 100:.1f}%`")
-                    st.markdown(f"**Detector**: `{alt.detector}`")
-                    st.json(alt.evidence)
+                    st.error(f"Alert Emitted: {alt.threat_class} | Severity: {alt.severity.value} | Confidence: {alt.confidence * 100:.1f}%")
+                    with st.expander("Evidence Details", expanded=True):
+                        st.json(alt.evidence)
             else:
-                st.success("✅ **FLOW CLASSIFIED AS BENIGN**: No threat thresholds exceeded and ML anomaly models scored within normal baselines.")
+                st.success("Benign Flow: Normal baseline characteristics.")
