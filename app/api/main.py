@@ -5,17 +5,18 @@ Strictly read-only with respect to the monitored network.
 """
 
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app import __version__
 from app.config import get_config
 from app.storage.database import ThreatDatabase
 
 app = FastAPI(
     title="AEGIS Threat Intelligence API",
     description="AI-Powered Passive Cyber Threat Intelligence & Unidirectional Network Monitoring",
-    version="1.0.0"
+    version=__version__
 )
 
 app.add_middleware(

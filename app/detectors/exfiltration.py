@@ -263,7 +263,6 @@ class ExfiltrationDetector(BaseDetector):
                 stats = calculate_rolling_transfer_statistics(history_list, win_sec, ts)
                 t_count = stats["transfer_count"]
                 cum_fwd = stats["cumulative_outbound_bytes"]
-                cum_bwd = stats["cumulative_inbound_bytes"]
                 cum_ratio = stats["outbound_inbound_ratio"]
 
                 # Gate: Must meet minimum transfer count and minimum cumulative outbound bytes
@@ -281,7 +280,6 @@ class ExfiltrationDetector(BaseDetector):
                     dom_ts = [t["timestamp"] for t in active_transfers]
                 iat_stats = calculate_iat_statistics(dom_ts)
                 iat_cv = iat_stats["cv"]
-                mean_iat = iat_stats["mean_iat"]
 
                 # -----------------------------------------------------------------
                 # STRICT ANTI-FALSE-POSITIVE GUARDS:

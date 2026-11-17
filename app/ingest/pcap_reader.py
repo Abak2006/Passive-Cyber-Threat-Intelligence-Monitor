@@ -72,7 +72,6 @@ class StreamingPCAPReader:
 
         src_port = 0
         dst_port = 0
-        flags = []
         is_syn = False
         is_ack = False
         is_fin = False

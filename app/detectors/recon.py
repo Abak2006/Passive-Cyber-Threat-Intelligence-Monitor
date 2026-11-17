@@ -4,7 +4,7 @@ Identifies Horizontal Scans, Vertical Scans, and Broad Reconnaissance.
 Evaluates destination host fan-out, port diversity, short flow durations, and SYN-only attempts.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from app.alerts.schema import DetectionResult, SeverityLevel
 from app.detectors.base import BaseDetector
 from app.features.entropy import distribution_entropy

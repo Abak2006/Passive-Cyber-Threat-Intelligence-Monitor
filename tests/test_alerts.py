@@ -2,8 +2,6 @@
 Unit Tests for Standard Alert Schema and Storage Layer.
 """
 
-from pathlib import Path
-import pytest
 from app.alerts.schema import StandardAlert, SeverityLevel, FlowRecord
 from app.storage.database import ThreatDatabase
 

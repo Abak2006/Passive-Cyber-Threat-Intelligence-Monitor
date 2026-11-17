@@ -5,7 +5,6 @@ Extracts lexical features for training the DGA supervised model.
 
 from typing import Optional, Tuple
 import pandas as pd
-import numpy as np
 
 from app.features.dns_features import DNSFeatureExtractor
 from training.dataset_adapters.base_adapter import BaseDatasetAdapter

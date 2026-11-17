@@ -7,7 +7,7 @@ and Sequence of Packet Lengths and Times (SPLT).
 
 import hashlib
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 # Standard GREASE values to filter out of JA3

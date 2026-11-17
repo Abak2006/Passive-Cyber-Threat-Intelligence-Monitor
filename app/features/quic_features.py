@@ -6,7 +6,7 @@ versions, connection IDs, and packet inter-arrival dynamics.
 """
 
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 import numpy as np
 
 from app.features.timing_features import calculate_iats

@@ -68,10 +68,9 @@ Features:
 import argparse
 import json
 from pathlib import Path
-import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 import numpy as np
-from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 from app.detectors.beaconing import BeaconingDetector
 from app.detectors.dga import DGADetector

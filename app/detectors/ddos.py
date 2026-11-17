@@ -11,7 +11,7 @@ import numpy as np
 
 from app.alerts.schema import DetectionResult, SeverityLevel
 from app.detectors.base import BaseDetector
-from app.features.entropy import distribution_entropy, source_ip_entropy, calculate_distribution_metrics
+from app.features.entropy import calculate_distribution_metrics
 
 
 class DDoSDetector(BaseDetector):

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 import joblib
 import numpy as np
 
-from app.alerts.schema import DetectionResult, SeverityLevel
+from app.alerts.schema import DetectionResult
 from app.detectors.base import BaseDetector
 from app.features.quic_features import QUICFeatureExtractor
 from app.features.tls_features import TLSFeatureExtractor

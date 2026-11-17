@@ -5,8 +5,7 @@ Passively parses TLS Client Hello and QUIC Long Header metadata without payload 
 """
 
 from collections import defaultdict, deque
-import time
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.alerts.schema import FlowRecord
 from app.features.dns_features import DNSRollingStats, normalize_dns_type

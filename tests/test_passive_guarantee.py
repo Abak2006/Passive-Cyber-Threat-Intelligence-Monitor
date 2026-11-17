@@ -8,9 +8,7 @@ Strictly audits codebase to guarantee:
 """
 
 import ast
-import os
 from pathlib import Path
-import pytest
 
 FORBIDDEN_CALLS = {
     "send", "sendto", "sendall", "sendp", "sendpfast",

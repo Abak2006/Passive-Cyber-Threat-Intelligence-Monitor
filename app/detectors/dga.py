@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 
-from app.alerts.schema import DetectionResult, SeverityLevel
+from app.alerts.schema import DetectionResult
 from app.detectors.base import BaseDetector
 from app.features.dns_features import DNSFeatureExtractor
 
@@ -53,7 +53,6 @@ class DGADetector(BaseDetector):
 
         # Analyze the most suspicious domain in the flow
         highest_score = 0.0
-        most_suspicious_domain = None
         best_evidence = {}
 
         for dom in set(domains_to_check):
@@ -61,7 +60,6 @@ class DGADetector(BaseDetector):
             score, evidence = self._evaluate_domain(dom, lex)
             if score > highest_score:
                 highest_score = score
-                most_suspicious_domain = dom
                 best_evidence = evidence
 
         if highest_score < 0.70:

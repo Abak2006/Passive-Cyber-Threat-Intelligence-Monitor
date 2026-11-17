@@ -9,7 +9,6 @@ import pytest
 
 from app.ingest.sources import (
     DataDiodeFeedSource,
-    PassiveInputSource,
     PacketEvent,
     PcapReplaySource,
     SyntheticStreamSource,

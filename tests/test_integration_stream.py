@@ -12,7 +12,7 @@ from app.alerts.generator import AlertPipeline
 from app.features.flow_features import FlowFeatureExtractor
 from app.ingest.flow_stream import FlowStreamManager
 from app.ingest.replay import PCAPReplayEngine
-from app.ingest.sources import DataDiodeFeedSource, PacketEvent, PcapReplaySource, SyntheticStreamSource
+from app.ingest.sources import DataDiodeFeedSource, PacketEvent, SyntheticStreamSource
 from app.storage.database import ThreatDatabase
 
 

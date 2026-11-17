@@ -7,7 +7,7 @@ Saves serialized models under models/ directory using joblib.
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
 import joblib
 import numpy as np
 import pandas as pd

@@ -6,7 +6,7 @@ Prevents double-counting correlated timing metrics, distinguishes timing quality
 and safely routes ambiguous anomalies to UNKNOWN_ANOMALY or INSUFFICIENT_EVIDENCE.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import numpy as np
 
 from app.alerts.schema import DetectionResult, SeverityLevel

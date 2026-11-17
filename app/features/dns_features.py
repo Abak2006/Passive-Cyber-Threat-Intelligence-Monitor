@@ -7,7 +7,7 @@ Tracks rolling DNS record-type distributions (A, AAAA, TXT, CNAME, NULL) to dete
 from collections import Counter, deque
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 from app.features.entropy import shannon_entropy
 

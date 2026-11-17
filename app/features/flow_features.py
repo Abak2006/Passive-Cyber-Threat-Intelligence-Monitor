@@ -3,7 +3,7 @@ Passive Flow Feature Extraction Engine.
 Aggregates bidirectional packet statistics, rate metrics, and packet length distributions.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 import numpy as np
 
 
@@ -52,8 +52,6 @@ class FlowFeatureExtractor:
             "dst_ip": flow_dict.get("dst_ip", ""),
             "dst_port": flow_dict.get("dst_port", 0),
             "protocol": flow_dict.get("protocol", "TCP"),
-            "input_source": flow_dict.get("input_source", flow_dict.get("source_type", "pcap_replay")),
-            "source_type": flow_dict.get("source_type", flow_dict.get("input_source", "pcap_replay")),
             "start_time": flow_dict.get("start_time", 0.0),
             "end_time": flow_dict.get("end_time", flow_dict.get("last_time", 0.0)),
             "duration": round(duration, 4),

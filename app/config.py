@@ -4,7 +4,7 @@ Loads YAML settings with environment variable overrides and safe defaults.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 import yaml
 
 

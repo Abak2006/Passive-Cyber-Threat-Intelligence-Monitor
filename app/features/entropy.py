@@ -6,7 +6,7 @@ Calculates Shannon entropy for string lexical analysis and network distribution 
 
 from collections import Counter, defaultdict
 import math
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, Optional, Union
 
 
 def shannon_entropy(data: Union[str, bytes]) -> float:

@@ -6,7 +6,6 @@ Uses Scapy for packet construction with zero active network transmission.
 
 from pathlib import Path
 import random
-import time
 from typing import Any, List
 import numpy as np
 import pandas as pd
@@ -34,7 +33,6 @@ def generate_training_csvs(output_dir: Path):
     expanded_benign = []
     for d in benign_domains:
         expanded_benign.append(d)
-        parts = d.split(".")
         expanded_benign.append(f"api.{d}")
         expanded_benign.append(f"cdn.{d}")
         expanded_benign.append(f"login.{d}")

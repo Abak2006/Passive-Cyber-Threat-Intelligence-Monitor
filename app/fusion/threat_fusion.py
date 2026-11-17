@@ -5,10 +5,9 @@ handles unknown anomaly classifications, and generates structured, explainable S
 Distinguishes SAME-SIGNAL evidence from INDEPENDENT PROTOCOL / BEHAVIORAL signals.
 """
 
-from collections import defaultdict
 from datetime import datetime, timezone
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from app.alerts.schema import DetectionResult, SeverityLevel, StandardAlert
 
@@ -31,8 +30,8 @@ class ThreatFusionEngine:
         self.confidence_boost = confidence_boost
         self.dedup_window_sec = dedup_window_sec
 
-        # Deduplication cache: (src_ip, dst_ip, threat_class) -> last_alert_time
-        self._dedup_cache: Dict[Tuple[str, str, str], float] = {}
+        # Deduplication cache: incident_key -> last_alert_time
+        self._dedup_cache: Dict[Tuple[str, ...], float] = {}
 
     def fuse(
         self,
@@ -251,12 +250,58 @@ class ThreatFusionEngine:
 
         return final_alerts
 
+    # Threat classes describing many sources converging on one victim. Source
+    # addresses are often spoofed, so the incident is identified by the target.
+    TARGET_SCOPED_CLASSES = frozenset({
+        "SYN_FLOOD",
+        "UDP_FLOOD",
+        "SPOOFED_SOURCE_DDOS",
+        "PROTOCOL_DDOS_ATTACK",
+        "AMPLIFICATION_REFLECTION_DDOS",
+    })
+
+    # Threat classes describing one actor touching many destinations. The
+    # incident is identified by the scanning source.
+    SOURCE_SCOPED_CLASSES = frozenset({
+        "PORT_SCAN_HORIZONTAL",
+        "PORT_SCAN_VERTICAL",
+        "BROAD_RECONNAISSANCE",
+    })
+
+    @classmethod
+    def incident_key(cls, alert: StandardAlert) -> Tuple[str, ...]:
+        """
+        Identity of the incident an alert belongs to, used for deduplication.
+
+        - Volumetric / DDoS: keyed on the victim (dst_ip), so a flood from
+          thousands of spoofed sources is one incident, not thousands.
+        - Scans / recon: keyed on the scanner (src_ip).
+        - Everything else (C2, exfiltration, tunnelling, ...): keyed on the
+          unordered host pair, so both directions of one conversation are
+          one incident.
+        """
+        subtype = str(alert.evidence.get("subtype", ""))
+        tc = alert.threat_class
+        if tc in cls.TARGET_SCOPED_CLASSES:
+            return ("dst", alert.dst_ip, tc, subtype)
+        if tc in cls.SOURCE_SCOPED_CLASSES:
+            return ("src", alert.src_ip, tc, subtype)
+        a, b = sorted((alert.src_ip, alert.dst_ip))
+        return ("pair", a, b, tc, subtype)
+
     def _should_emit(self, alert: StandardAlert, current_time: float) -> bool:
-        """Deduplicates repetitive alerts on identical endpoints within sliding window."""
-        subtype = alert.evidence.get("subtype", "")
-        key = (alert.src_ip, alert.dst_ip, alert.threat_class, subtype)
-        last_time = self._dedup_cache.get(key, 0.0)
-        if current_time - last_time < self.dedup_window_sec:
+        """Suppresses repeat alerts for the same incident within the dedup window."""
+        key = self.incident_key(alert)
+        last_time = self._dedup_cache.get(key)
+        if last_time is not None and current_time - last_time < self.dedup_window_sec:
             return False
         self._dedup_cache[key] = current_time
+        self._prune_dedup_cache(current_time)
         return True
+
+    def _prune_dedup_cache(self, current_time: float) -> None:
+        """Drops expired entries so the cache does not grow without bound."""
+        if len(self._dedup_cache) < 4096:
+            return
+        cutoff = current_time - self.dedup_window_sec
+        self._dedup_cache = {k: t for k, t in self._dedup_cache.items() if t >= cutoff}

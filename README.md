@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests Passing](https://img.shields.io/badge/tests-50%2F50%20passing-brightgreen.svg)]()
+[![CI](https://github.com/Abak2006/Passive-Cyber-Threat-Intelligence-Monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/Abak2006/Passive-Cyber-Threat-Intelligence-Monitor/actions/workflows/ci.yml)
 [![Enclave Security](https://img.shields.io/badge/mode-unidirectional%20passive-success.svg)]()
 
 > **AEGIS: AI-Powered Passive Cyber Threat Intelligence Platform**  
@@ -220,6 +220,14 @@ When correlated signals coincide, the Threat Fusion Engine synthesizes composite
 - `SUSPICIOUS_ENCRYPTED_TRAFFIC` + `DATA_EXFILTRATION` $\rightarrow$ `POSSIBLE_ENCRYPTED_EXFILTRATION`
 - `DGA_DOMAIN_DETECTION` + `BOTNET_C2_BEACONING` $\rightarrow$ `BOTNET_C2_INFRASTRUCTURE`
 
+### Incident Deduplication:
+Repeat alerts for the same incident are suppressed for a 15-second window (`dedup_window_sec`). What counts as the same incident depends on the threat class:
+- **Volumetric / DDoS** (`SYN_FLOOD`, `UDP_FLOOD`, `SPOOFED_SOURCE_DDOS`, ...): keyed on the **victim** address, so a flood from thousands of spoofed sources is one alert instead of thousands.
+- **Scans / recon** (`PORT_SCAN_*`, `BROAD_RECONNAISSANCE`): keyed on the **scanner** address.
+- **Everything else** (C2, exfiltration, tunnelling, ...): keyed on the **unordered host pair**, so both directions of one conversation give one alert.
+
+On the bundled demo PCAP this cuts output from 109 alerts to 17 without losing any distinct incident.
+
 ---
 
 ## 10. Dashboard
@@ -284,9 +292,24 @@ max (raw)  | 88.1         | 35.9         | 22.033     | 54.419     | 201.7
 git clone https://github.com/Abak2006/Passive-Cyber-Threat-Intelligence-Monitor.git
 cd Passive-Cyber-Threat-Intelligence-Monitor
 
-# Install Python requirements
+# Install the package and the `aegis` command (add [dashboard] for the Streamlit UI)
+pip install -e ".[dashboard,dev]"
+
+# Or, without packaging:
 pip install -r requirements.txt
 ```
+
+Every task is available through one command:
+
+```bash
+aegis replay --pcap data/sample/demo.pcap --speed 0   # detect threats in a PCAP
+aegis benchmark --sweep --duration 3                  # throughput / latency
+aegis train --detector all                            # retrain ML models
+aegis serve --port 8000                               # REST API (docs at /docs)
+aegis dashboard                                       # Streamlit analyst UI
+```
+
+The `python -m ...` commands shown elsewhere in this README still work.
 
 ### 2. Setup Models & Datasets
 ```bash
@@ -297,7 +320,8 @@ python -m training.train --detector all
 
 ### 3. Run Automated Tests
 ```bash
-python -m pytest tests/ -v
+python -m pytest -v
+ruff check .
 ```
 
 ### 4. Run the Live Demo

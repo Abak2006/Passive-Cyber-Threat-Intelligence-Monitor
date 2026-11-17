@@ -5,7 +5,6 @@ including comprehensive AEGIS v2 adversarial beacon robustness test suite.
 """
 
 import numpy as np
-import pytest
 from app.detectors.ddos import DDoSDetector
 from app.detectors.beaconing import BeaconingDetector
 from app.detectors.dga import DGADetector

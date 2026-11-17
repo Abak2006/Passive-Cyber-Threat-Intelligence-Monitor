@@ -119,3 +119,64 @@ def test_alert_deduplication():
     flow["end_time"] = now + 11.0
     res3 = fusion.fuse([det], flow)
     assert len(res3) == 1
+
+
+def _flow(src_ip, src_port, dst_ip, dst_port, end_time, protocol="TCP"):
+    return {
+        "flow_id": f"{protocol}:{src_ip}:{src_port}<->{dst_ip}:{dst_port}",
+        "src_ip": src_ip,
+        "src_port": src_port,
+        "dst_ip": dst_ip,
+        "dst_port": dst_port,
+        "protocol": protocol,
+        "end_time": end_time,
+    }
+
+
+def test_spoofed_ddos_collapses_to_one_incident_per_victim():
+    fusion = ThreatFusionEngine(dedup_window_sec=15.0)
+    now = time.time()
+    det = DetectionResult(
+        threat_class="SPOOFED_SOURCE_DDOS",
+        confidence=0.9,
+        severity=SeverityLevel.CRITICAL,
+        detector="ddos_detector",
+    )
+    emitted = []
+    for i in range(50):
+        emitted += fusion.fuse([det], _flow(f"203.0.113.{i}", 40000 + i, "10.0.0.5", 80, now + i * 0.1))
+    assert len(emitted) == 1
+
+    # A different victim is a separate incident.
+    emitted = fusion.fuse([det], _flow("203.0.113.1", 40001, "10.0.0.6", 80, now + 1.0))
+    assert len(emitted) == 1
+
+
+def test_beaconing_both_directions_is_one_incident():
+    fusion = ThreatFusionEngine(dedup_window_sec=15.0)
+    now = time.time()
+    det = DetectionResult(
+        threat_class="BOTNET_C2_BEACONING",
+        confidence=0.82,
+        severity=SeverityLevel.HIGH,
+        detector="beaconing_detector",
+    )
+    fwd = fusion.fuse([det], _flow("10.0.0.45", 53004, "198.51.100.20", 443, now))
+    rev = fusion.fuse([det], _flow("198.51.100.20", 443, "10.0.0.45", 53004, now + 0.5))
+    assert len(fwd) == 1
+    assert len(rev) == 0
+
+
+def test_horizontal_scan_keyed_on_scanner():
+    fusion = ThreatFusionEngine(dedup_window_sec=15.0)
+    now = time.time()
+    det = DetectionResult(
+        threat_class="PORT_SCAN_HORIZONTAL",
+        confidence=0.9,
+        severity=SeverityLevel.HIGH,
+        detector="recon_detector",
+    )
+    emitted = []
+    for i in range(20):
+        emitted += fusion.fuse([det], _flow("10.0.0.99", 50000, f"10.0.1.{i}", 22, now + i * 0.1))
+    assert len(emitted) == 1

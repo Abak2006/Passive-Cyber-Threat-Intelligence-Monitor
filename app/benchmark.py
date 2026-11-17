@@ -15,7 +15,6 @@ import argparse
 import json
 from pathlib import Path
 import platform
-import sys
 import time
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -25,7 +24,7 @@ from app.alerts.generator import AlertPipeline
 from app.features.flow_features import FlowFeatureExtractor
 from app.ingest.flow_stream import FlowStreamManager
 from app.ingest.pcap_reader import StreamingPCAPReader
-from app.ingest.sources import PcapReplaySource, SyntheticStreamSource
+from app.ingest.sources import SyntheticStreamSource
 from app.storage.database import ThreatDatabase
 
 
